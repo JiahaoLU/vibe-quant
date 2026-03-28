@@ -26,12 +26,12 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 ## Adding a new strategy
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
-2. Implement `calculate_signals(self, event: BarBundleEvent) -> None`
-3. Accept `events: queue.Queue`, `symbols: list[str]`, and `get_bars: Callable[[str, int], list[TickEvent]]` in the constructor; call `super().__init__(get_bars)`
+2. Implement `calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None` — return a `SignalBundleEvent` when signals fire, `None` otherwise
+3. Accept `emit: Callable[[Event], None]`, `symbols: list[str]`, and `get_bars: Callable[[str, int], list[TickEvent]]` in the constructor; call `super().__init__(emit, get_bars)`
 4. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
-5. Emit signals via `self._events.put(SignalBundleEvent(...))` — only when at least one symbol has a signal
+5. Do **not** call `self._emit()` directly — return the bundle from `calculate_signals`; `get_signals` (inherited from the ABC) handles emission
 6. Export it from `trading/impl/__init__.py`
-7. Wire it in `run_backtest.py`: pass `data.get_latest_bars` as the `get_bars` argument
+7. Wire it in `run_backtest.py`: pass `events.put` as `emit`, `data.get_latest_bars` as `get_bars`
 
 ## Adding a new component type (e.g. RiskManager)
 
