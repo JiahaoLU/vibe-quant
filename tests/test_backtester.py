@@ -34,7 +34,7 @@ def test_bar_bundle_routes_to_strategy():
     bt = Backtester(events, _stopped_data(), strategy, portfolio, execution)
     bt.run()
 
-    strategy.calculate_signals.assert_called_once_with(bundle)
+    strategy.get_signals.assert_called_once_with(bundle)
 
 
 def test_signal_bundle_routes_to_portfolio():

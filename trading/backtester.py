@@ -29,7 +29,7 @@ class Backtester:
                 event = self._events.get(block=False)
                 match event.type:
                     case EventType.BAR_BUNDLE:
-                        self._strategy.calculate_signals(event)
+                        self._strategy.get_signals(event)
                     case EventType.SIGNAL_BUNDLE:
                         self._portfolio.on_signal(event)
                     case EventType.ORDER:
@@ -46,7 +46,7 @@ class Backtester:
             event = self._events.get(block=False)
             match event.type:
                 case EventType.BAR_BUNDLE:
-                    self._strategy.calculate_signals(event)
+                    self._strategy.get_signals(event)
                 case EventType.SIGNAL_BUNDLE:
                     self._portfolio.on_signal(event)
                 case EventType.ORDER:
