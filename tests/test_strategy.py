@@ -1,4 +1,3 @@
-import queue
 from datetime import datetime
 from trading.base.strategy import Strategy
 from trading.impl.strategy import SMACrossoverStrategy
@@ -63,7 +62,7 @@ def test_get_signals_does_not_emit_when_calculate_signals_returns_none():
 def test_no_signal_before_enough_history():
     collected = []
     bars = _bars([100.0] * 5)
-    strategy = SMACrossoverStrategy(lambda e: None, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
     strategy.get_signals(_bundle(["AAPL"]))
     assert collected == []
 
@@ -103,7 +102,7 @@ def test_exit_signal_when_fast_below_slow():
 def test_no_signal_when_flat():
     collected = []
     bars = _bars([100.0] * 30)
-    strategy = SMACrossoverStrategy(lambda e: None, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
     strategy.get_signals(_bundle(["AAPL"]))
     assert collected == []
 
@@ -124,6 +123,6 @@ def test_multi_symbol_signals_are_independent():
 def test_no_emission_when_no_symbol_signals():
     collected = []
     bars = _bars([100.0] * 30)
-    strategy = SMACrossoverStrategy(lambda e: None, ["AAPL", "MSFT"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(collected.append, ["AAPL", "MSFT"], get_bars=lambda s, n: bars, fast=10, slow=30)
     strategy.get_signals(_bundle(["AAPL", "MSFT"]))
     assert collected == []
