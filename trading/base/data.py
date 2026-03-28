@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from ..events import TickEvent
+
 
 class DataHandler(ABC):
     @abstractmethod
@@ -8,6 +10,6 @@ class DataHandler(ABC):
         ...
 
     @abstractmethod
-    def get_latest_bars(self, symbol: str, n: int = 1) -> list[dict]:
+    def get_latest_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         """Return the last N bars for a symbol."""
         ...

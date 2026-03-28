@@ -25,7 +25,7 @@ RESULTS_PATH    = "results/equity_curve.csv"
 
 events    = queue.Queue()
 data      = MultiCSVDataHandler(events, SYMBOLS, CSV_PATHS)
-strategy  = SMACrossoverStrategy(events, data, SYMBOLS, fast=FAST_WINDOW, slow=SLOW_WINDOW)
+strategy  = SMACrossoverStrategy(events, SYMBOLS, data.get_latest_bars, fast=FAST_WINDOW, slow=SLOW_WINDOW)
 portfolio = SimplePortfolio(events, data, SYMBOLS, initial_capital=INITIAL_CAPITAL)
 execution = SimulatedExecutionHandler(events, commission=COMMISSION, slippage_pct=SLIPPAGE_PCT)
 
