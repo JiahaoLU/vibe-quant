@@ -1,6 +1,6 @@
 #claude
 .claude/settings.local.json
-docs/superpowers/
+#docs/superpowers/
 
 # Virtual environment
 .venv/
