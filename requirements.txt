@@ -1,0 +1,13 @@
+# Core engine — no third-party dependencies required.
+
+# Visualization (plot_results.ipynb):
+matplotlib>=3.7
+
+# Jupyter kernel registration:
+ipykernel
+
+# Tests:
+pytest>=7.0
+
+# Optional — makes post-run analysis cleaner (not used yet):
+# pandas>=2.0

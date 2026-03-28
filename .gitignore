@@ -1,0 +1,19 @@
+#claude
+.claude/settings.local.json
+docs/superpowers/
+
+# Virtual environment
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated data and results (reproducible — not worth tracking)
+data/
+results/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
