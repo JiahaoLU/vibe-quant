@@ -2,6 +2,7 @@ import queue
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from trading.base.strategy import Strategy
 from trading.impl.strategy import SMACrossoverStrategy
 from trading.events import BarBundleEvent, SignalBundleEvent, TickEvent
 
@@ -115,9 +116,6 @@ def test_no_emission_when_no_symbol_signals():
 
     assert events.empty()
 
-
-from trading.base.strategy import Strategy
-from datetime import datetime
 
 def test_strategy_abc_exposes_get_bars():
     """get_bars on the ABC should delegate to the callable passed at construction."""
