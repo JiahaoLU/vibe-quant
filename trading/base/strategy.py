@@ -4,7 +4,7 @@ from typing import Callable
 from ..events import BarBundleEvent, Event, SignalBundleEvent, TickEvent
 
 
-class Strategy(ABC):
+class StrategyBase(ABC):
     def __init__(
         self,
         emit:     Callable[[Event], None],
@@ -13,6 +13,13 @@ class Strategy(ABC):
         self._emit     = emit
         self._get_bars = get_bars
 
+    @abstractmethod
+    def get_signals(self, event: BarBundleEvent) -> None:
+        """Process a bar bundle. May emit zero or more SignalBundleEvents."""
+        ...
+
+
+class Strategy(StrategyBase):
     def get_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         return self._get_bars(symbol, n)
 

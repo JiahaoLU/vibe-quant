@@ -126,3 +126,21 @@ def test_no_emission_when_no_symbol_signals():
     strategy = SMACrossoverStrategy(collected.append, ["AAPL", "MSFT"], get_bars=lambda s, n: bars, fast=10, slow=30)
     strategy.get_signals(_bundle(["AAPL", "MSFT"]))
     assert collected == []
+
+
+def test_strategy_is_subclass_of_strategy_base():
+    from trading.base.strategy import StrategyBase
+    assert issubclass(Strategy, StrategyBase)
+
+
+def test_strategy_base_get_signals_is_abstract():
+    from trading.base.strategy import StrategyBase
+
+    class _NoImpl(StrategyBase):
+        pass
+
+    try:
+        _NoImpl(emit=lambda e: None, get_bars=lambda s, n: [])
+        assert False, "Expected TypeError"
+    except TypeError:
+        pass
