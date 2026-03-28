@@ -18,9 +18,9 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 ## Architecture rules
 
-- **No direct cross-component calls.** All communication goes through the shared `queue.Queue`. `Portfolio` and `Strategy` both receive a `get_bars: Callable[[str, int], list[TickEvent]]` callable instead of a full `DataHandler` reference.
+- **No direct cross-component calls.** All component communication goes through the `emit: Callable[[Event], None]` callable injected at construction. The concrete queue is owned by `run_backtest.py` and `Backtester`; components never import or reference `queue.Queue` directly. `Portfolio` and `Strategy` both receive a `get_bars: Callable[[str, int], list[TickEvent]]` callable instead of a full `DataHandler` reference.
 - **Event ownership:** each component owns exactly one stage of the pipeline. Strategy never touches orders. Portfolio never touches indicators.
-- **ABCs are load-bearing.** `DataHandler`, `Strategy`, `Portfolio`, `ExecutionHandler` are all abstract base classes. Concrete implementations go in the same file as the ABC, named `Multi...`, `Simple...`, `Simulated...`, etc.
+- **ABCs are load-bearing.** `DataHandler`, `Strategy`, `Portfolio`, `ExecutionHandler` are all abstract base classes in `trading/base/`. Concrete implementations live in `trading/impl/`, named `Multi...`, `Simple...`, `Simulated...`, etc.
 - **No pandas in the hot loop.** The event loop operates on plain Python dicts and lists. Pandas is only for post-run analysis.
 
 ## Adding a new strategy
