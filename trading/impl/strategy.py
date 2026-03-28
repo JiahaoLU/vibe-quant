@@ -1,8 +1,8 @@
 import queue
+from typing import Callable
 
-from ..base.data import DataHandler
 from ..base.strategy import Strategy
-from ..events import BarBundleEvent, SignalBundleEvent, SignalEvent
+from ..events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 
 class SMACrossoverStrategy(Strategy):
@@ -14,14 +14,14 @@ class SMACrossoverStrategy(Strategy):
 
     def __init__(
         self,
-        events:  queue.Queue,
-        data:    DataHandler,
-        symbols: list[str],
-        fast:    int = 10,
-        slow:    int = 30,
+        events:   queue.Queue,
+        symbols:  list[str],
+        get_bars: Callable[[str, int], list[TickEvent]],
+        fast:     int = 10,
+        slow:     int = 30,
     ):
+        super().__init__(get_bars)
         self._events   = events
-        self._data     = data
         self._symbols  = symbols
         self._fast     = fast
         self._slow     = slow
@@ -31,7 +31,7 @@ class SMACrossoverStrategy(Strategy):
         signals: dict[str, SignalEvent] = {}
 
         for symbol in self._symbols:
-            bars = self._data.get_latest_bars(symbol, self._slow)
+            bars = self.get_bars(symbol, self._slow)
             if len(bars) < self._slow:
                 continue
 
