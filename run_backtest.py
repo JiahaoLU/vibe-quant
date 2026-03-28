@@ -6,11 +6,14 @@ COMMISSION, SLIPPAGE_PCT to experiment.
 import csv
 import queue
 
-from trading.backtester     import Backtester
-from trading.impl.data      import MultiCSVDataHandler
-from trading.impl.execution import SimulatedExecutionHandler
-from trading.impl.portfolio import SimplePortfolio
-from trading.impl.strategy  import SMACrossoverStrategy
+from trading.backtester import Backtester
+from trading.impl import (
+    MultiCSVDataHandler,
+    SimulatedExecutionHandler,
+    SimplePortfolio,
+    SMACrossoverStrategy,
+    StrategyContainer,
+)
 
 # --- Configuration -----------------------------------------------------------
 SYMBOLS         = ["AAPL", "MSFT"]
@@ -25,7 +28,8 @@ RESULTS_PATH    = "results/equity_curve.csv"
 
 events    = queue.Queue()
 data      = MultiCSVDataHandler(events.put, SYMBOLS, CSV_PATHS)
-strategy  = SMACrossoverStrategy(events.put, SYMBOLS, data.get_latest_bars, fast=FAST_WINDOW, slow=SLOW_WINDOW)
+strategy  = StrategyContainer(events.put, data.get_latest_bars)
+strategy.add(SMACrossoverStrategy, symbols=SYMBOLS, fast=FAST_WINDOW, slow=SLOW_WINDOW)
 portfolio = SimplePortfolio(events.put, data.get_latest_bars, SYMBOLS, initial_capital=INITIAL_CAPITAL)
 execution = SimulatedExecutionHandler(events.put, commission=COMMISSION, slippage_pct=SLIPPAGE_PCT)
 

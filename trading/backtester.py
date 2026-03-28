@@ -3,7 +3,7 @@ import queue
 from .base.data      import DataHandler
 from .base.execution import ExecutionHandler
 from .base.portfolio import Portfolio
-from .base.strategy  import Strategy
+from .base.strategy  import StrategyBase
 from .events         import EventType
 
 
@@ -12,7 +12,7 @@ class Backtester:
         self,
         events:    queue.Queue,
         data:      DataHandler,
-        strategy:  Strategy,
+        strategy:  StrategyBase,
         portfolio: Portfolio,
         execution: ExecutionHandler,
     ):
