@@ -4,7 +4,7 @@ A minimal, extensible event-driven trading engine and backtester written in pure
 
 ## Architecture
 
-All components communicate exclusively through a shared event queue — no direct cross-component calls.
+All components communicate through an `emit: Callable[[Event], None]` injected at construction — no direct cross-component calls. The concrete `queue.Queue` is owned by `run_backtest.py` and `Backtester` only.
 
 ```
 DataHandler → BarBundleEvent → Strategy → SignalBundleEvent → Portfolio → OrderEvent → ExecutionHandler → FillEvent → Portfolio
@@ -21,7 +21,7 @@ DataHandler → BarBundleEvent → Strategy → SignalBundleEvent → Portfolio 
 ### Event types
 
 ```
-BarBundleEvent    timestamp, bars: dict[symbol → {open, high, low, close, volume}]
+BarBundleEvent    timestamp, bars: dict[symbol → TickEvent]
 SignalBundleEvent timestamp, signals: dict[symbol → SignalEvent]
 SignalEvent       symbol, timestamp, signal_type (LONG | EXIT), strength  [value type, not queued]
 OrderEvent        timestamp, symbol, order_type, direction (BUY | SELL), quantity, reference_price
@@ -39,7 +39,7 @@ source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 3. Register the Jupyter kernel
-python -m ipykernel install --user --name=claude-learn
+python -m ipykernel install --user --name=vibe-quant
 
 # 4. Generate synthetic OHLCV data (540 trading days)
 python generate_data.py
@@ -47,17 +47,17 @@ python generate_data.py
 # 5. Run the backtest
 python run_backtest.py
 
-# 6. Visualize results (select the "claude-learn" kernel in the notebook)
+# 6. Visualize results (select the "vibe-quant" kernel in the notebook)
 jupyter notebook plot_results.ipynb
 ```
 
 Output:
 
 ```
-Initial capital :  $10,000.00
-Final equity    :   $8,321.64
-Total return    :     -16.78%
-Trades (fills)  :          21
+Initial capital : $ 10,000.00
+Final equity    : $  7,834.38
+Total return    : -21.66%
+Trades (fills)  : 28
 Equity curve    : results/equity_curve.csv
 ```
 
@@ -93,36 +93,38 @@ Create a new file in `trading/impl/` and subclass `Strategy`:
 
 ```python
 # trading/impl/my_strategy.py
-import queue
-from ..base.data import DataHandler
+from typing import Callable
 from ..base.strategy import Strategy
-from ..events import BarBundleEvent, SignalBundleEvent, SignalEvent
+from ..events import BarBundleEvent, Event, SignalBundleEvent, SignalEvent, TickEvent
 
 class MyStrategy(Strategy):
-    def __init__(self, events: queue.Queue, data: DataHandler, symbols: list[str]):
-        self._events  = events
-        self._data    = data
+    def __init__(
+        self,
+        emit:     Callable[[Event], None],
+        symbols:  list[str],
+        get_bars: Callable[[str, int], list[TickEvent]],
+    ):
+        super().__init__(emit, get_bars)
         self._symbols = symbols
 
-    def calculate_signals(self, event: BarBundleEvent) -> None:
+    def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
         signals = {}
         for symbol in self._symbols:
-            bars = self._data.get_latest_bars(symbol, 50)
+            bars = self.get_bars(symbol, 50)
             # ... compute indicator ...
             signals[symbol] = SignalEvent(
                 symbol=symbol,
                 timestamp=event.timestamp,
                 signal_type="LONG",
             )
-        if signals:
-            self._events.put(SignalBundleEvent(timestamp=event.timestamp, signals=signals))
+        return SignalBundleEvent(timestamp=event.timestamp, signals=signals) if signals else None
 ```
 
 Then swap it into `run_backtest.py`:
 
 ```python
 from trading.impl.my_strategy import MyStrategy
-strategy = MyStrategy(events, data, SYMBOLS)
+strategy = MyStrategy(events.put, SYMBOLS, data.get_latest_bars)
 ```
 
 ## Project structure
@@ -171,7 +173,3 @@ Install: `pip install -r requirements.txt`
 - **Live trading** — replace `MultiCSVDataHandler` with a streaming data source; replace `SimulatedExecutionHandler` with a broker API client
 - **PerformanceAnalyzer** — consume the equity curve to compute Sharpe ratio, max drawdown, CAGR
 
-## to-do list
-
-- make strategy more independent and easy to implement concret strategies
-- strategy better doesn't take datahandler as init parameter
