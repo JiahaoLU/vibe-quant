@@ -1,10 +1,10 @@
 import csv
-import queue
 from collections import deque
 from datetime import datetime
+from typing import Callable
 
 from ..base.data import DataHandler
-from ..events import BarBundleEvent, TickEvent
+from ..events import BarBundleEvent, Event, TickEvent
 
 
 class MultiCSVDataHandler(DataHandler):
@@ -15,9 +15,9 @@ class MultiCSVDataHandler(DataHandler):
 
     def __init__(
         self,
-        events: queue.Queue,
-        symbols: list[str],
-        csv_paths: list[str],
+        emit:        Callable[[Event], None],
+        symbols:     list[str],
+        csv_paths:   list[str],
         max_history: int = 200,
         date_format: str = "%Y-%m-%d",
     ):
@@ -26,7 +26,7 @@ class MultiCSVDataHandler(DataHandler):
                 f"symbols and csv_paths must have the same length "
                 f"(got {len(symbols)} and {len(csv_paths)})"
             )
-        self._events  = events
+        super().__init__(emit)
         self._symbols = symbols
 
         raw: dict[str, dict[datetime, TickEvent]] = {}
@@ -78,7 +78,7 @@ class MultiCSVDataHandler(DataHandler):
         self._index += 1
         for symbol, bar in bars.items():
             self._history[symbol].append(bar)
-        self._events.put(BarBundleEvent(timestamp=ts, bars=bars))
+        self._emit(BarBundleEvent(timestamp=ts, bars=bars))
         return True
 
     def get_latest_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
