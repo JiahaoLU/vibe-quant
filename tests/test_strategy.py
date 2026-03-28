@@ -2,7 +2,7 @@ import queue
 from datetime import datetime
 from trading.base.strategy import Strategy
 from trading.impl.strategy import SMACrossoverStrategy
-from trading.events import BarBundleEvent, SignalBundleEvent, TickEvent
+from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 
 def _bars(closes: list[float]) -> list[TickEvent]:
@@ -29,6 +29,37 @@ def test_strategy_abc_exposes_get_bars():
 
     stub = _Stub(get_bars=lambda s, n: [tick])
     assert stub.get_bars("AAPL", 1) == [tick]
+
+
+def test_get_signals_emits_when_calculate_signals_returns_bundle():
+    ts = datetime(2020, 1, 2)
+    tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
+    bundle = _bundle(["AAPL"])
+    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal_type="LONG")
+    result = SignalBundleEvent(timestamp=ts, signals={"AAPL": sig})
+
+    class _Stub(Strategy):
+        def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
+            return result
+
+    collected = []
+    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick])
+    stub.get_signals(bundle)
+    assert collected == [result]
+
+
+def test_get_signals_does_not_emit_when_calculate_signals_returns_none():
+    ts = datetime(2020, 1, 2)
+    tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
+
+    class _Stub(Strategy):
+        def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
+            return None
+
+    collected = []
+    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick])
+    stub.get_signals(_bundle(["AAPL"]))
+    assert collected == []
 
 
 def test_no_signal_before_enough_history():
