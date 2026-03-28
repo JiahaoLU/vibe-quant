@@ -1,8 +1,7 @@
-import queue
 from typing import Callable
 
 from ..base.strategy import Strategy
-from ..events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
+from ..events import BarBundleEvent, Event, SignalBundleEvent, SignalEvent, TickEvent
 
 
 class SMACrossoverStrategy(Strategy):
@@ -14,20 +13,19 @@ class SMACrossoverStrategy(Strategy):
 
     def __init__(
         self,
-        events:   queue.Queue,
+        emit:     Callable[[Event], None],
         symbols:  list[str],
         get_bars: Callable[[str, int], list[TickEvent]],
         fast:     int = 10,
         slow:     int = 30,
     ):
-        super().__init__(get_bars)
-        self._events   = events
+        super().__init__(emit, get_bars)
         self._symbols  = symbols
         self._fast     = fast
         self._slow     = slow
         self._position: dict[str, str | None] = {s: None for s in symbols}
 
-    def calculate_signals(self, event: BarBundleEvent) -> None:
+    def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
         signals: dict[str, SignalEvent] = {}
 
         for symbol in self._symbols:
@@ -54,8 +52,4 @@ class SMACrossoverStrategy(Strategy):
                     signal_type = "EXIT",
                 )
 
-        if signals:
-            self._events.put(SignalBundleEvent(
-                timestamp = event.timestamp,
-                signals   = signals,
-            ))
+        return SignalBundleEvent(timestamp=event.timestamp, signals=signals) if signals else None
