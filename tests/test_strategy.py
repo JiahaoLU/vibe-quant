@@ -135,12 +135,10 @@ def test_strategy_is_subclass_of_strategy_base():
 
 def test_strategy_base_get_signals_is_abstract():
     from trading.base.strategy import StrategyBase
+    import pytest
 
     class _NoImpl(StrategyBase):
         pass
 
-    try:
+    with pytest.raises(TypeError, match="Can't instantiate abstract class"):
         _NoImpl(emit=lambda e: None, get_bars=lambda s, n: [])
-        assert False, "Expected TypeError"
-    except TypeError:
-        pass

@@ -5,6 +5,7 @@ from ..events import BarBundleEvent, Event, SignalBundleEvent, TickEvent
 
 
 class StrategyBase(ABC):
+    """Abstract base for trading strategies. Receives bar bundles and emits signals via the injected emit callable. get_bars provides read-only access to bar history for indicator calculation."""
     def __init__(
         self,
         emit:     Callable[[Event], None],
