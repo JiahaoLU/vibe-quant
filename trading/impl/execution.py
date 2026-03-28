@@ -1,7 +1,7 @@
-import queue
+from typing import Callable
 
 from ..base.execution import ExecutionHandler
-from ..events import FillEvent, OrderEvent
+from ..events import Event, FillEvent, OrderEvent
 
 
 class SimulatedExecutionHandler(ExecutionHandler):
@@ -12,11 +12,11 @@ class SimulatedExecutionHandler(ExecutionHandler):
 
     def __init__(
         self,
-        events: queue.Queue,
-        commission: float = 1.0,
+        emit:         Callable[[Event], None],
+        commission:   float = 1.0,
         slippage_pct: float = 0.0005,
     ):
-        self._events       = events
+        super().__init__(emit)
         self._commission   = commission
         self._slippage_pct = slippage_pct
 
@@ -24,7 +24,7 @@ class SimulatedExecutionHandler(ExecutionHandler):
         direction_factor = 1 if event.direction == "BUY" else -1
         fill_price = event.reference_price * (1 + direction_factor * self._slippage_pct)
 
-        self._events.put(FillEvent(
+        self._emit(FillEvent(
             symbol     = event.symbol,
             timestamp  = event.timestamp,
             direction  = event.direction,
