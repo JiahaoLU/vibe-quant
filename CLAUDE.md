@@ -27,11 +27,11 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
 2. Implement `calculate_signals(self, event: BarBundleEvent) -> None`
-3. Accept `symbols: list[str]` in the constructor
-4. Read bar history via `self._data.get_latest_bars(symbol, n)` per symbol
+3. Accept `events: queue.Queue`, `symbols: list[str]`, and `get_bars: Callable[[str, int], list[TickEvent]]` in the constructor; call `super().__init__(get_bars)`
+4. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
 5. Emit signals via `self._events.put(SignalBundleEvent(...))` — only when at least one symbol has a signal
 6. Export it from `trading/impl/__init__.py`
-7. Wire it in `run_backtest.py`
+7. Wire it in `run_backtest.py`: pass `data.get_latest_bars` as the `get_bars` argument
 
 ## Adding a new component type (e.g. RiskManager)
 
