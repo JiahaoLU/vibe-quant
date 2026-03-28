@@ -9,6 +9,7 @@ from trading.events import BarBundleEvent, EventType
 
 
 def make_csv(rows: list[dict]) -> str:
+    """Write OHLCV rows to a temp CSV and return the file path."""
     f = tempfile.NamedTemporaryFile(
         mode="w", suffix=".csv", delete=False, newline=""
     )
@@ -25,6 +26,7 @@ AAPL_ROWS = [
     {"timestamp": "2020-01-02", "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000},
     {"timestamp": "2020-01-03", "open": 100.5, "high": 102.0, "low": 100.0, "close": 101.0, "volume": 1100},
 ]
+# MSFT has 2020-01-02 and 2020-01-04 — no overlap with AAPL's 2020-01-03
 MSFT_ROWS = [
     {"timestamp": "2020-01-02", "open": 200.0, "high": 201.0, "low": 199.0, "close": 200.5, "volume": 2000},
     {"timestamp": "2020-01-04", "open": 200.5, "high": 202.0, "low": 200.0, "close": 201.0, "volume": 2100},
@@ -54,6 +56,7 @@ def test_timestamps_are_union_sorted():
     try:
         events = queue.Queue()
         handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
+        # Union: 2020-01-02, 2020-01-03, 2020-01-04 — 3 timesteps
         count = 0
         while handler.update_bars():
             count += 1
@@ -69,9 +72,9 @@ def test_missing_symbol_bar_is_zero_filled():
     try:
         events = queue.Queue()
         handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
-        handler.update_bars()
+        handler.update_bars()  # 2020-01-02 — both present
         events.get_nowait()
-        handler.update_bars()
+        handler.update_bars()  # 2020-01-03 — MSFT missing
         bundle = events.get_nowait()
         assert bundle.bars["AAPL"].close == 101.0
         assert bundle.bars["MSFT"].close == 0.0
@@ -87,7 +90,7 @@ def test_present_bars_have_correct_values():
     try:
         events = queue.Queue()
         handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
-        handler.update_bars()
+        handler.update_bars()  # 2020-01-02
         bundle = events.get_nowait()
         assert bundle.bars["AAPL"].close == 100.5
         assert bundle.bars["MSFT"].close == 200.5
@@ -103,8 +106,8 @@ def test_get_latest_bars_returns_history():
     try:
         events = queue.Queue()
         handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
-        handler.update_bars()
-        handler.update_bars()
+        handler.update_bars()  # 2020-01-02
+        handler.update_bars()  # 2020-01-03
         bars = handler.get_latest_bars("AAPL", 2)
         assert len(bars) == 2
         assert bars[-1].close == 101.0
@@ -120,9 +123,9 @@ def test_get_latest_bars_partial_history():
     try:
         events = queue.Queue()
         handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
-        handler.update_bars()
+        handler.update_bars()  # only 1 bar so far
         bars = handler.get_latest_bars("AAPL", 10)
-        assert len(bars) == 1
+        assert len(bars) == 1  # fewer than requested
     finally:
         os.unlink(aapl)
         os.unlink(msft)
