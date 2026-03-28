@@ -61,14 +61,15 @@ def test_no_duplicate_long_signal():
 
 
 def test_exit_signal_when_fast_below_slow():
+    # First trigger LONG: slow_sma=(20*90+10*110)/30=96.67, fast_sma=110 → LONG
+    # Then flip: slow_sma=(20*110+10*90)/30=103.33, fast_sma=90 → EXIT
     events = queue.Queue()
-    bars_long = _bars([90.0] * 20 + [110.0] * 10)
-    strategy = SMACrossoverStrategy(events, ["AAPL"], get_bars=lambda s, n: bars_long, fast=10, slow=30)
+    current_bars = _bars([90.0] * 20 + [110.0] * 10)
+    strategy = SMACrossoverStrategy(events, ["AAPL"], get_bars=lambda s, n: current_bars, fast=10, slow=30)
     strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
-    events.get_nowait()
+    events.get_nowait()  # consume LONG
 
-    bars_exit = _bars([110.0] * 20 + [90.0] * 10)
-    strategy._get_bars = lambda s, n: bars_exit
+    current_bars = _bars([110.0] * 20 + [90.0] * 10)
     strategy.calculate_signals(_bundle(["AAPL"], close=90.0))
     bundle = events.get_nowait()
     assert bundle.signals["AAPL"].signal_type == "EXIT"
