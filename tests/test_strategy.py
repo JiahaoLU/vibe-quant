@@ -114,3 +114,20 @@ def test_no_emission_when_no_symbol_signals():
     strategy.calculate_signals(_bundle(["AAPL", "MSFT"]))
 
     assert events.empty()
+
+
+from trading.base.strategy import Strategy
+from datetime import datetime
+
+def test_strategy_abc_exposes_get_bars():
+    """get_bars on the ABC should delegate to the callable passed at construction."""
+    ts = datetime(2020, 1, 2)
+    tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
+
+    class _Stub(Strategy):
+        def calculate_signals(self, event: BarBundleEvent) -> None:
+            pass
+
+    stub = _Stub(get_bars=lambda s, n: [tick])
+    result = stub.get_bars("AAPL", 1)
+    assert result == [tick]
