@@ -1,8 +1,7 @@
-import queue
+from typing import Callable
 
-from ..base.data import DataHandler
 from ..base.portfolio import Portfolio
-from ..events import FillEvent, OrderEvent, SignalBundleEvent
+from ..events import Event, FillEvent, OrderEvent, SignalBundleEvent, TickEvent
 
 
 class SimplePortfolio(Portfolio):
@@ -13,13 +12,13 @@ class SimplePortfolio(Portfolio):
 
     def __init__(
         self,
-        events:          queue.Queue,
-        data:            DataHandler,
+        emit:            Callable[[Event], None],
+        get_bars:        Callable[[str, int], list[TickEvent]],
         symbols:         list[str],
         initial_capital: float = 10_000.0,
     ):
-        self._events          = events
-        self._data            = data
+        super().__init__(emit)
+        self._get_bars        = get_bars
         self._symbols         = symbols
         self._cash            = initial_capital
         self._initial_capital = initial_capital
@@ -29,7 +28,7 @@ class SimplePortfolio(Portfolio):
     def on_signal(self, event: SignalBundleEvent) -> None:
         available_cash = self._cash
         for symbol, signal in event.signals.items():
-            bars = self._data.get_latest_bars(symbol, 1)
+            bars = self._get_bars(symbol, 1)
             if not bars:
                 continue
             price = bars[-1].close
@@ -38,7 +37,7 @@ class SimplePortfolio(Portfolio):
                 quantity = int(available_cash // price)
                 if quantity > 0:
                     available_cash -= quantity * price
-                    self._events.put(OrderEvent(
+                    self._emit(OrderEvent(
                         symbol          = symbol,
                         timestamp       = event.timestamp,
                         order_type      = "MARKET",
@@ -48,7 +47,7 @@ class SimplePortfolio(Portfolio):
                     ))
 
             elif signal.signal_type == "EXIT" and self._holdings[symbol] > 0:
-                self._events.put(OrderEvent(
+                self._emit(OrderEvent(
                     symbol          = symbol,
                     timestamp       = event.timestamp,
                     order_type      = "MARKET",
@@ -64,7 +63,7 @@ class SimplePortfolio(Portfolio):
 
         market_value = 0.0
         for symbol in self._symbols:
-            bars = self._data.get_latest_bars(symbol, 1)
+            bars = self._get_bars(symbol, 1)
             if bars:
                 market_value += self._holdings[symbol] * bars[-1].close
 
