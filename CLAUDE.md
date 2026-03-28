@@ -18,7 +18,7 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 ## Architecture rules
 
-- **No direct cross-component calls.** All communication goes through the shared `queue.Queue`. Components only call methods on `DataHandler` to read bar history.
+- **No direct cross-component calls.** All communication goes through the shared `queue.Queue`. `Portfolio` holds a `DataHandler` reference to read bar history; `Strategy` receives a `get_bars` callable instead of a full `DataHandler`.
 - **Event ownership:** each component owns exactly one stage of the pipeline. Strategy never touches orders. Portfolio never touches indicators.
 - **ABCs are load-bearing.** `DataHandler`, `Strategy`, `Portfolio`, `ExecutionHandler` are all abstract base classes. Concrete implementations go in the same file as the ABC, named `Multi...`, `Simple...`, `Simulated...`, etc.
 - **No pandas in the hot loop.** The event loop operates on plain Python dicts and lists. Pandas is only for post-run analysis.
