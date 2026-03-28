@@ -20,18 +20,23 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 - **No direct cross-component calls.** All component communication goes through the `emit: Callable[[Event], None]` callable injected at construction. The concrete queue is owned by `run_backtest.py` and `Backtester`; components never import or reference `queue.Queue` directly. `Portfolio` and `Strategy` both receive a `get_bars: Callable[[str, int], list[TickEvent]]` callable instead of a full `DataHandler` reference.
 - **Event ownership:** each component owns exactly one stage of the pipeline. Strategy never touches orders. Portfolio never touches indicators.
-- **ABCs are load-bearing.** `DataHandler`, `Strategy`, `Portfolio`, `ExecutionHandler` are all abstract base classes in `trading/base/`. Concrete implementations live in `trading/impl/`, named `Multi...`, `Simple...`, `Simulated...`, etc.
+- **ABCs are load-bearing.** `DataHandler`, `StrategyBase`, `Strategy`, `Portfolio`, `ExecutionHandler` are abstract base classes in `trading/base/`. `StrategyBase` defines the shared wiring; `Strategy` adds the researcher-facing `calculate_signals` interface. Concrete implementations live in `trading/impl/`.
 - **No pandas in the hot loop.** The event loop operates on plain Python dicts and lists. Pandas is only for post-run analysis.
 
 ## Adding a new strategy
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
 2. Implement `calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None` — return a `SignalBundleEvent` when signals fire, `None` otherwise
-3. Accept `emit: Callable[[Event], None]`, `symbols: list[str]`, and `get_bars: Callable[[str, int], list[TickEvent]]` in the constructor; call `super().__init__(emit, get_bars)`
+3. Accept `symbols: list[str]` (and any other strategy-specific params) in the constructor; call `super().__init__(emit, get_bars)` — `emit` and `get_bars` are injected by `StrategyContainer` automatically
 4. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
-5. Do **not** call `self._emit()` directly — return the bundle from `calculate_signals`; `get_signals` (inherited from the ABC) handles emission
+5. Do **not** call `self._emit()` directly — return the bundle from `calculate_signals`; `get_signals` (inherited from `Strategy`) handles emission
 6. Export it from `trading/impl/__init__.py`
-7. Wire it in `run_backtest.py`: pass `events.put` as `emit`, `data.get_latest_bars` as `get_bars`
+7. Register it in `run_backtest.py`:
+
+   ```python
+   strategy = StrategyContainer(events.put, data.get_latest_bars)
+   strategy.add(MyStrategy, symbols=SYMBOLS)
+   ```
 
 ## Adding a new component type (e.g. RiskManager)
 
