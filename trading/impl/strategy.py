@@ -35,7 +35,7 @@ class SMACrossoverStrategy(Strategy):
             if len(bars) < self._slow:
                 continue
 
-            closes   = [b["close"] for b in bars]
+            closes   = [b.close for b in bars]
             fast_sma = sum(closes[-self._fast:]) / self._fast
             slow_sma = sum(closes) / self._slow
 

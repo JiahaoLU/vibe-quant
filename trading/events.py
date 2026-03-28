@@ -17,9 +17,20 @@ class Event:
 
 
 @dataclass
+class TickEvent:                 # value type — not an Event subclass, not queued directly
+    symbol:    str
+    timestamp: datetime
+    open:      float
+    high:      float
+    low:       float
+    close:     float
+    volume:    float
+
+
+@dataclass
 class BarBundleEvent(Event):
     timestamp: datetime
-    bars:      dict[str, dict]   # symbol → {open, high, low, close, volume}
+    bars:      dict[str, TickEvent]   # symbol → tick
     type: EventType = field(default=EventType.BAR_BUNDLE, init=False)
 
 

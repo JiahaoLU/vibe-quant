@@ -76,9 +76,9 @@ def test_missing_symbol_bar_is_zero_filled():
         events.get_nowait()
         handler.update_bars()  # 2020-01-03 — MSFT missing
         bundle = events.get_nowait()
-        assert bundle.bars["AAPL"]["close"] == 101.0
-        assert bundle.bars["MSFT"]["close"] == 0.0
-        assert bundle.bars["MSFT"]["open"] == 0.0
+        assert bundle.bars["AAPL"].close == 101.0
+        assert bundle.bars["MSFT"].close == 0.0
+        assert bundle.bars["MSFT"].open == 0.0
     finally:
         os.unlink(aapl)
         os.unlink(msft)
@@ -92,8 +92,8 @@ def test_present_bars_have_correct_values():
         handler = MultiCSVDataHandler(events, ["AAPL", "MSFT"], [aapl, msft])
         handler.update_bars()  # 2020-01-02
         bundle = events.get_nowait()
-        assert bundle.bars["AAPL"]["close"] == 100.5
-        assert bundle.bars["MSFT"]["close"] == 200.5
+        assert bundle.bars["AAPL"].close == 100.5
+        assert bundle.bars["MSFT"].close == 200.5
         assert bundle.timestamp == datetime(2020, 1, 2)
     finally:
         os.unlink(aapl)
@@ -110,8 +110,8 @@ def test_get_latest_bars_returns_history():
         handler.update_bars()  # 2020-01-03
         bars = handler.get_latest_bars("AAPL", 2)
         assert len(bars) == 2
-        assert bars[-1]["close"] == 101.0
-        assert bars[0]["close"] == 100.5
+        assert bars[-1].close == 101.0
+        assert bars[0].close == 100.5
     finally:
         os.unlink(aapl)
         os.unlink(msft)

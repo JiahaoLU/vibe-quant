@@ -4,14 +4,15 @@ from unittest.mock import MagicMock
 
 from trading.backtester import Backtester
 from trading.events import (
-    BarBundleEvent, FillEvent, OrderEvent, SignalBundleEvent, SignalEvent,
+    BarBundleEvent, FillEvent, OrderEvent, SignalBundleEvent, SignalEvent, TickEvent,
 )
 
 
 def _bar_bundle() -> BarBundleEvent:
+    ts = datetime(2020, 1, 2)
     return BarBundleEvent(
-        timestamp=datetime(2020, 1, 2),
-        bars={"AAPL": {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000.0}},
+        timestamp=ts,
+        bars={"AAPL": TickEvent(symbol="AAPL", timestamp=ts, open=100.0, high=101.0, low=99.0, close=100.0, volume=1000.0)},
     )
 
 

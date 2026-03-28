@@ -4,7 +4,7 @@ from collections import deque
 from datetime import datetime
 
 from ..base.data import DataHandler
-from ..events import BarBundleEvent
+from ..events import BarBundleEvent, TickEvent
 
 
 class MultiCSVDataHandler(DataHandler):
@@ -12,8 +12,6 @@ class MultiCSVDataHandler(DataHandler):
     Loads N CSVs (one per symbol), computes the union of all timestamps,
     and replays one BarBundleEvent per timestep. Missing bars are zero-filled.
     """
-
-    _ZERO_BAR = {"open": 0.0, "high": 0.0, "low": 0.0, "close": 0.0, "volume": 0.0}
 
     def __init__(
         self,
@@ -31,19 +29,22 @@ class MultiCSVDataHandler(DataHandler):
         self._events  = events
         self._symbols = symbols
 
-        raw: dict[str, dict[datetime, dict]] = {}
+        raw: dict[str, dict[datetime, TickEvent]] = {}
         for symbol, path in zip(symbols, csv_paths):
-            raw[symbol] = self._load(path, date_format)
+            raw[symbol] = self._load(symbol, path, date_format)
 
         all_ts: set[datetime] = set()
         for data in raw.values():
             all_ts.update(data.keys())
         timeline = sorted(all_ts)
 
-        self._merged: list[tuple[datetime, dict[str, dict]]] = []
+        self._merged: list[tuple[datetime, dict[str, TickEvent]]] = []
         for ts in timeline:
             bundle = {
-                symbol: raw[symbol].get(ts, dict(self._ZERO_BAR))
+                symbol: raw[symbol].get(
+                    ts,
+                    TickEvent(symbol=symbol, timestamp=ts, open=0.0, high=0.0, low=0.0, close=0.0, volume=0.0),
+                )
                 for symbol in symbols
             }
             self._merged.append((ts, bundle))
@@ -53,19 +54,21 @@ class MultiCSVDataHandler(DataHandler):
             s: deque(maxlen=max_history) for s in symbols
         }
 
-    def _load(self, path: str, date_format: str) -> dict[datetime, dict]:
-        result: dict[datetime, dict] = {}
+    def _load(self, symbol: str, path: str, date_format: str) -> dict[datetime, TickEvent]:
+        result: dict[datetime, TickEvent] = {}
         with open(path, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 ts = datetime.strptime(row["timestamp"], date_format)
-                result[ts] = {
-                    "open":   float(row["open"]),
-                    "high":   float(row["high"]),
-                    "low":    float(row["low"]),
-                    "close":  float(row["close"]),
-                    "volume": float(row["volume"]),
-                }
+                result[ts] = TickEvent(
+                    symbol    = symbol,
+                    timestamp = ts,
+                    open      = float(row["open"]),
+                    high      = float(row["high"]),
+                    low       = float(row["low"]),
+                    close     = float(row["close"]),
+                    volume    = float(row["volume"]),
+                )
         return result
 
     def update_bars(self) -> bool:
@@ -78,6 +81,6 @@ class MultiCSVDataHandler(DataHandler):
         self._events.put(BarBundleEvent(timestamp=ts, bars=bars))
         return True
 
-    def get_latest_bars(self, symbol: str, n: int = 1) -> list[dict]:
+    def get_latest_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         bars = list(self._history[symbol])
         return bars[-n:] if len(bars) >= n else bars

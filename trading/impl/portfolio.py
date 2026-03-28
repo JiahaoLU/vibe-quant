@@ -32,7 +32,7 @@ class SimplePortfolio(Portfolio):
             bars = self._data.get_latest_bars(symbol, 1)
             if not bars:
                 continue
-            price = bars[-1]["close"]
+            price = bars[-1].close
 
             if signal.signal_type == "LONG" and self._holdings[symbol] == 0:
                 quantity = int(available_cash // price)
@@ -66,7 +66,7 @@ class SimplePortfolio(Portfolio):
         for symbol in self._symbols:
             bars = self._data.get_latest_bars(symbol, 1)
             if bars:
-                market_value += self._holdings[symbol] * bars[-1]["close"]
+                market_value += self._holdings[symbol] * bars[-1].close
 
         self._equity_curve.append({
             "timestamp":    event.timestamp,

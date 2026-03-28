@@ -3,7 +3,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from trading.impl.portfolio import SimplePortfolio
-from trading.events import FillEvent, OrderEvent, SignalBundleEvent, SignalEvent
+from trading.events import FillEvent, OrderEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 
 def _data(prices: dict[str, float]) -> MagicMock:
@@ -11,7 +11,7 @@ def _data(prices: dict[str, float]) -> MagicMock:
     data = MagicMock()
     def get_bars(symbol, n=1):
         p = prices[symbol]
-        return [{"open": p, "high": p, "low": p, "close": p, "volume": 1000.0}]
+        return [TickEvent(symbol=symbol, timestamp=datetime(2020, 1, 2), open=p, high=p, low=p, close=p, volume=1000.0)]
     data.get_latest_bars.side_effect = get_bars
     return data
 

@@ -3,17 +3,18 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from trading.impl.strategy import SMACrossoverStrategy
-from trading.events import BarBundleEvent, SignalBundleEvent
+from trading.events import BarBundleEvent, SignalBundleEvent, TickEvent
 
 
-def _bars(closes: list[float]) -> list[dict]:
-    return [{"open": c, "high": c, "low": c, "close": c, "volume": 1000.0} for c in closes]
+def _bars(closes: list[float]) -> list[TickEvent]:
+    return [TickEvent(symbol="", timestamp=datetime(2020, 1, 2), open=c, high=c, low=c, close=c, volume=1000.0) for c in closes]
 
 
 def _bundle(symbols: list[str], close: float = 100.0) -> BarBundleEvent:
+    ts = datetime(2020, 1, 2)
     return BarBundleEvent(
-        timestamp=datetime(2020, 1, 2),
-        bars={s: {"open": close, "high": close, "low": close, "close": close, "volume": 1000.0}
+        timestamp=ts,
+        bars={s: TickEvent(symbol=s, timestamp=ts, open=close, high=close, low=close, close=close, volume=1000.0)
               for s in symbols},
     )
 
