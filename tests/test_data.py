@@ -4,7 +4,7 @@ import queue
 import tempfile
 from datetime import datetime
 
-from trading.impl.data import MultiCSVDataHandler
+from trading.impl.multi_csv_data_handler import MultiCSVDataHandler
 from trading.events import BarBundleEvent, EventType
 
 

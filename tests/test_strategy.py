@@ -1,6 +1,6 @@
 from datetime import datetime
 from trading.base.strategy import Strategy
-from trading.impl.strategy import SMACrossoverStrategy
+from trading.impl.sma_crossover_strategy import SMACrossoverStrategy
 from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 

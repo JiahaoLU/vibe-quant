@@ -1,7 +1,7 @@
-from .data               import MultiCSVDataHandler
-from .execution          import SimulatedExecutionHandler
-from .portfolio          import SimplePortfolio
-from .strategy           import SMACrossoverStrategy
+from .multi_csv_data_handler import MultiCSVDataHandler
+from .simulated_execution_handler import SimulatedExecutionHandler
+from .simple_portfolio       import SimplePortfolio
+from .sma_crossover_strategy import SMACrossoverStrategy
 from .strategy_container import StrategyContainer
 
 __all__ = [
