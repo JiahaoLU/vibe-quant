@@ -11,7 +11,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m ipykernel install --user --name=claude-learn
-python generate_data.py           # generate data/sample_data.csv
 python run_backtest.py            # run backtest, write results/equity_curve.csv
 jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 ```

@@ -41,10 +41,7 @@ pip install -r requirements.txt
 # 3. Register the Jupyter kernel
 python -m ipykernel install --user --name=vibe-quant
 
-# 4. Generate synthetic OHLCV data (540 trading days)
-python generate_data.py
-
-# 5. Run the backtest
+# 4. Run the backtest
 python run_backtest.py
 
 # 6. Visualize results (select the "vibe-quant" kernel in the notebook)
@@ -148,7 +145,6 @@ strategy = MyStrategy(events.put, SYMBOLS, data.get_latest_bars)
 │   └── sample_data.csv
 ├── results/
 │   └── equity_curve.csv
-├── generate_data.py         # synthetic data generator
 ├── run_backtest.py          # entry point
 ├── plot_results.ipynb       # equity curve, drawdown, trade markers, summary stats
 └── requirements.txt
