@@ -6,6 +6,8 @@ import pandas as pd
 import pytest
 
 from external.yahoo import fetch_daily_bars
+from trading.impl.yahoo_data_handler import YahooDataHandler
+from trading.events import BarBundleEvent, EventType
 
 
 # ---------------------------------------------------------------------------
@@ -64,10 +66,6 @@ def test_fetch_daily_bars_raises_on_empty_response():
         mock_ticker_cls.return_value.history.return_value = empty_df
         with pytest.raises(ValueError, match="AAPL"):
             fetch_daily_bars("AAPL", "2020-01-01", "2020-01-04")
-
-
-from trading.impl.yahoo_data_handler import YahooDataHandler
-from trading.events import BarBundleEvent, EventType
 
 
 # ---------------------------------------------------------------------------
