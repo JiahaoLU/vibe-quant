@@ -4,6 +4,8 @@ import queue
 import tempfile
 from datetime import datetime
 
+import pytest
+
 from trading.impl.multi_csv_data_handler import MultiCSVDataHandler
 from trading.events import BarBundleEvent, EventType
 
@@ -144,3 +146,53 @@ def test_update_bars_returns_false_when_exhausted():
     finally:
         os.unlink(aapl)
         os.unlink(msft)
+
+
+# ---------------------------------------------------------------------------
+# Random generation mode
+# ---------------------------------------------------------------------------
+
+def test_random_mode_emits_bar_bundle_events():
+    events = queue.Queue()
+    handler = MultiCSVDataHandler(events.put, ["AAPL"], start="2020-01-01", end="2020-02-01")
+    assert handler.update_bars() is True
+    event = events.get_nowait()
+    assert isinstance(event, BarBundleEvent)
+    assert "AAPL" in event.bars
+
+
+def test_random_mode_only_weekday_bars():
+    events = queue.Queue()
+    handler = MultiCSVDataHandler(events.put, ["AAPL"], start="2020-01-01", end="2020-01-15")
+    timestamps = []
+    while handler.update_bars():
+        timestamps.append(events.get_nowait().timestamp)
+    assert all(ts.weekday() < 5 for ts in timestamps)
+
+
+def test_random_mode_bar_values_are_valid():
+    events = queue.Queue()
+    handler = MultiCSVDataHandler(events.put, ["AAPL"], start="2020-01-01", end="2020-01-15")
+    handler.update_bars()
+    bar = events.get_nowait().bars["AAPL"]
+    assert bar.open   > 0
+    assert bar.high   >= bar.low
+    assert bar.close  > 0
+    assert bar.volume > 0
+
+
+def test_random_mode_is_reproducible():
+    q1, q2 = queue.Queue(), queue.Queue()
+    h1 = MultiCSVDataHandler(q1.put, ["AAPL"], start="2020-01-01", end="2020-02-01")
+    h2 = MultiCSVDataHandler(q2.put, ["AAPL"], start="2020-01-01", end="2020-02-01")
+    bars1, bars2 = [], []
+    while h1.update_bars():
+        bars1.append(q1.get_nowait().bars["AAPL"].close)
+    while h2.update_bars():
+        bars2.append(q2.get_nowait().bars["AAPL"].close)
+    assert bars1 == bars2
+
+
+def test_random_mode_raises_without_start_end():
+    with pytest.raises(ValueError):
+        MultiCSVDataHandler(queue.Queue().put, ["AAPL"])
