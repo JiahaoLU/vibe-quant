@@ -1,23 +1,25 @@
 """
 Entry point — wire all components together and run the backtest.
-Modify SYMBOLS, CSV_PATHS, INITIAL_CAPITAL, FAST_WINDOW, SLOW_WINDOW,
+Modify SYMBOLS, START, END, INITIAL_CAPITAL, FAST_WINDOW, SLOW_WINDOW,
 COMMISSION, SLIPPAGE_PCT to experiment.
 """
 import csv
 import queue
 
+from external.yahoo import fetch_daily_bars
 from trading.backtester import Backtester
 from trading.impl import (
-    MultiCSVDataHandler,
     SimulatedExecutionHandler,
     SimplePortfolio,
     SMACrossoverStrategy,
     StrategyContainer,
+    YahooDataHandler,
 )
 
 # --- Configuration -----------------------------------------------------------
 SYMBOLS         = ["AAPL", "MSFT"]
-CSV_PATHS       = ["data/AAPL.csv", "data/MSFT.csv"]
+START           = "2020-01-01"
+END             = "2022-01-01"
 INITIAL_CAPITAL = 10_000.0
 FAST_WINDOW     = 10
 SLOW_WINDOW     = 30
@@ -26,11 +28,15 @@ SLIPPAGE_PCT    = 0.0005 # 0.05%
 RESULTS_PATH    = "results/equity_curve.csv"
 # -----------------------------------------------------------------------------
 
-events    = queue.Queue()
-data      = MultiCSVDataHandler(events.put, SYMBOLS, CSV_PATHS)
-strategy  = StrategyContainer(events.put, data.get_latest_bars)
+events   = queue.Queue()
+data     = None  # resolved after strategy symbols are known
+
+strategy = StrategyContainer(events.put, lambda s, n: data.get_latest_bars(s, n))
 strategy.add(SMACrossoverStrategy, symbols=SYMBOLS, fast=FAST_WINDOW, slow=SLOW_WINDOW)
-portfolio = SimplePortfolio(events.put, data.get_latest_bars, SYMBOLS, initial_capital=INITIAL_CAPITAL)
+
+symbols   = strategy.symbols
+data      = YahooDataHandler(events.put, symbols, start=START, end=END, fetch=fetch_daily_bars)
+portfolio = SimplePortfolio(events.put, data.get_latest_bars, symbols, initial_capital=INITIAL_CAPITAL)
 execution = SimulatedExecutionHandler(events.put, commission=COMMISSION, slippage_pct=SLIPPAGE_PCT)
 
 bt = Backtester(events, data, strategy, portfolio, execution)
