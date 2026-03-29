@@ -28,15 +28,15 @@ class YahooDataHandler(DataHandler):
         symbols:     list[str],
         start:       str,
         end:         str,
-        fetch:       Callable[[str, str, str], list[dict]],
+        fetch:       Callable[[list[str], str, str], dict[str, list[dict]]],
         max_history: int = 200,
     ):
         super().__init__(emit)
         self._symbols = symbols
 
+        all_rows = fetch(symbols, start, end)
         raw: dict[str, dict[datetime, TickEvent]] = {}
-        for symbol in symbols:
-            rows = fetch(symbol, start, end)
+        for symbol, rows in all_rows.items():
             raw[symbol] = {
                 row["timestamp"]: TickEvent(
                     symbol    = symbol,

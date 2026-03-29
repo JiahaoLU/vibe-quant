@@ -45,27 +45,29 @@ MSFT_ROWS = [
 # fetch_daily_bars tests
 # ---------------------------------------------------------------------------
 
-def test_fetch_daily_bars_returns_list_of_dicts():
+def test_fetch_daily_bars_returns_dict_of_lists():
     df = _make_history_df(AAPL_ROWS)
-    with patch("external.yahoo.yf.Ticker") as mock_ticker_cls:
-        mock_ticker_cls.return_value.history.return_value = df
-        result = fetch_daily_bars("AAPL", "2020-01-01", "2020-01-04")
+    with patch("external.yahoo.yf.download") as mock_download:
+        mock_download.return_value = df
+        result = fetch_daily_bars(["AAPL"], "2020-01-01", "2020-01-04")
 
-    assert len(result) == 2
-    assert result[0]["timestamp"] == datetime(2020, 1, 2)
-    assert result[0]["open"]      == 100.0
-    assert result[0]["high"]      == 101.0
-    assert result[0]["low"]       == 99.0
-    assert result[0]["close"]     == 100.5
-    assert result[0]["volume"]    == 1_000.0
+    assert "AAPL" in result
+    rows = result["AAPL"]
+    assert len(rows) == 2
+    assert rows[0]["timestamp"] == datetime(2020, 1, 2)
+    assert rows[0]["open"]      == 100.0
+    assert rows[0]["high"]      == 101.0
+    assert rows[0]["low"]       == 99.0
+    assert rows[0]["close"]     == 100.5
+    assert rows[0]["volume"]    == 1_000.0
 
 
 def test_fetch_daily_bars_raises_on_empty_response():
     empty_df = pd.DataFrame()
-    with patch("external.yahoo.yf.Ticker") as mock_ticker_cls:
-        mock_ticker_cls.return_value.history.return_value = empty_df
-        with pytest.raises(ValueError, match="AAPL"):
-            fetch_daily_bars("AAPL", "2020-01-01", "2020-01-04")
+    with patch("external.yahoo.yf.download") as mock_download:
+        mock_download.return_value = empty_df
+        with pytest.raises(ValueError):
+            fetch_daily_bars(["AAPL"], "2020-01-01", "2020-01-04")
 
 
 # ---------------------------------------------------------------------------
@@ -74,10 +76,13 @@ def test_fetch_daily_bars_raises_on_empty_response():
 
 def _make_fetch(data: dict[str, list[dict]]):
     """Return a fetch callable that serves pre-canned rows, or raises on unknown symbol."""
-    def fetch(symbol: str, start: str, end: str) -> list[dict]:
-        if symbol not in data or not data[symbol]:
-            raise ValueError(f"No data for {symbol}")
-        return data[symbol]
+    def fetch(symbols: list[str], start: str, end: str) -> dict[str, list[dict]]:
+        result = {}
+        for symbol in symbols:
+            if symbol not in data or not data[symbol]:
+                raise ValueError(f"No data for {symbol}")
+            result[symbol] = data[symbol]
+        return result
     return fetch
 
 

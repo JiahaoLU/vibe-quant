@@ -1,41 +1,49 @@
-from datetime import datetime
-
+import pandas as pd
 import yfinance as yf
 
 
-def fetch_daily_bars(symbol: str, start: str, end: str) -> list[dict]:
+def fetch_daily_bars(symbols: list[str], start: str, end: str) -> dict[str, list[dict]]:
     """
-    Fetch daily OHLCV bars for a symbol from Yahoo Finance.
+    Fetch daily OHLCV bars for one or more symbols from Yahoo Finance in a single request.
 
     Parameters
     ----------
-    symbol : str  ticker symbol, e.g. "AAPL"
-    start  : str  ISO date string, inclusive, e.g. "2020-01-01"
-    end    : str  ISO date string, exclusive, e.g. "2022-01-01"
+    symbols : list[str]  ticker symbols, e.g. ["AAPL", "MSFT"]
+    start   : str        ISO date string, inclusive, e.g. "2020-01-01"
+    end     : str        ISO date string, exclusive, e.g. "2022-01-01"
 
     Returns
     -------
-    list[dict]  each dict: timestamp (datetime), open, high, low, close, volume (float)
+    dict[str, list[dict]]  symbol -> list of dicts with keys:
+                           timestamp (datetime), open, high, low, close, volume (float)
 
     Raises
     ------
-    ValueError  if the ticker is unknown or the date range returns no data
+    ValueError  if the response is empty or a symbol returns no data
     """
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(start=start, end=end)
+    df = yf.download(symbols, start=start, end=end, auto_adjust=True, progress=False)
     if df.empty:
         raise ValueError(
-            f"No data returned for symbol '{symbol}' between {start} and {end}. "
-            "The ticker may be invalid or the date range may produce no results."
+            f"No data returned for symbols {symbols} between {start} and {end}."
         )
-    result: list[dict] = []
-    for ts, row in df.iterrows():
-        result.append({
-            "timestamp": ts.to_pydatetime().replace(tzinfo=None),
-            "open":      float(row["Open"]),
-            "high":      float(row["High"]),
-            "low":       float(row["Low"]),
-            "close":     float(row["Close"]),
-            "volume":    float(row["Volume"]),
-        })
+
+    result: dict[str, list[dict]] = {}
+    for symbol in symbols:
+        sym_df = df.xs(symbol, level=1, axis=1) if isinstance(df.columns, pd.MultiIndex) else df
+        if sym_df.empty:
+            raise ValueError(
+                f"No data returned for symbol '{symbol}' between {start} and {end}."
+            )
+        rows = []
+        for ts, row in sym_df.iterrows():
+            rows.append({
+                "timestamp": ts.to_pydatetime().replace(tzinfo=None),
+                "open":      float(row["Open"]),
+                "high":      float(row["High"]),
+                "low":       float(row["Low"]),
+                "close":     float(row["Close"]),
+                "volume":    float(row["Volume"]),
+            })
+        result[symbol] = rows
+
     return result
