@@ -7,11 +7,11 @@ import csv
 import queue
 
 from external.yahoo import fetch_daily_bars
+from strategies.sma_crossover_strategy import SMACrossoverStrategy, SMACrossoverStrategyParams
 from trading.backtester import Backtester
 from trading.impl import (
     SimulatedExecutionHandler,
     SimplePortfolio,
-    SMACrossoverStrategy,
     StrategyContainer,
     YahooDataHandler,
 )
@@ -32,7 +32,8 @@ events   = queue.Queue()
 data     = None  # resolved after strategy symbols are known
 
 strategy = StrategyContainer(events.put, lambda s, n: data.get_latest_bars(s, n))
-strategy.add(SMACrossoverStrategy, symbols=SYMBOLS, fast=FAST_WINDOW, slow=SLOW_WINDOW)
+strategy.add(SMACrossoverStrategy, SMACrossoverStrategyParams(
+    symbols=SYMBOLS, fast=FAST_WINDOW, slow=SLOW_WINDOW))
 
 symbols   = strategy.symbols
 data      = YahooDataHandler(events.put, symbols, start=START, end=END, fetch=fetch_daily_bars)

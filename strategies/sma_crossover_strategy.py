@@ -1,7 +1,15 @@
-from typing import Callable
+from dataclasses import dataclass
 
-from ..base.strategy import Strategy
-from ..events import BarBundleEvent, Event, SignalBundleEvent, SignalEvent, TickEvent
+from trading.base.strategy_params import StrategyParams
+
+from trading.base.strategy import Strategy
+from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent
+
+@dataclass
+class SMACrossoverStrategyParams(StrategyParams):
+    symbols:  list[str]
+    fast:     int = 10
+    slow:     int = 30
 
 
 class SMACrossoverStrategy(Strategy):
@@ -11,19 +19,15 @@ class SMACrossoverStrategy(Strategy):
     Operates on multiple symbols simultaneously.
     """
 
-    def __init__(
+    def _init(
         self,
-        emit:     Callable[[Event], None],
-        symbols:  list[str],
-        get_bars: Callable[[str, int], list[TickEvent]],
-        fast:     int = 10,
-        slow:     int = 30,
+        strategy_params: StrategyParams
     ):
-        super().__init__(emit, get_bars)
-        self._symbols  = symbols
-        self._fast     = fast
-        self._slow     = slow
-        self._position: dict[str, str | None] = {s: None for s in symbols}
+        self._symbols  = strategy_params.symbols
+        if type(strategy_params) is SMACrossoverStrategyParams:
+            self._fast     = strategy_params.fast
+            self._slow     = strategy_params.slow
+        self._position: dict[str, str | None] = {s: None for s in self._symbols }
 
     def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
         signals: dict[str, SignalEvent] = {}

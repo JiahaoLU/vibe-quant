@@ -3,7 +3,6 @@ from .impl import (
     MultiCSVDataHandler,
     SimulatedExecutionHandler,
     SimplePortfolio,
-    SMACrossoverStrategy,
 )
 
 __all__ = [
@@ -14,5 +13,4 @@ __all__ = [
     "MultiCSVDataHandler",
     "SimulatedExecutionHandler",
     "SimplePortfolio",
-    "SMACrossoverStrategy",
 ]

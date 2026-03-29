@@ -1,3 +1,5 @@
+import csv
+import os
 from collections import deque
 from datetime import datetime
 from typing import Callable
@@ -68,6 +70,18 @@ class YahooDataHandler(DataHandler):
 
         self._index = 0
         self._history: dict[str, deque] = {s: deque(maxlen=max_history) for s in symbols}
+        self._save_bars(raw)
+
+    def _save_bars(self, raw: dict[str, dict[datetime, TickEvent]]) -> None:
+        os.makedirs("results", exist_ok=True)
+        for symbol, bars in raw.items():
+            path = os.path.join("results", f"{symbol}_yahoo.csv")
+            with open(path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+                for ts in sorted(bars):
+                    bar = bars[ts]
+                    writer.writerow([ts.strftime("%Y-%m-%d"), bar.open, bar.high, bar.low, bar.close, bar.volume])
 
     def update_bars(self) -> bool:
         if self._index >= len(self._merged):

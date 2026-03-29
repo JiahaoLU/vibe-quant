@@ -1,4 +1,5 @@
 import csv
+import os
 import random
 from collections import deque
 from datetime import date, datetime, timedelta
@@ -73,6 +74,18 @@ class MultiCSVDataHandler(DataHandler):
         self._history: dict[str, deque] = {
             s: deque(maxlen=max_history) for s in symbols
         }
+        self._save_bars(raw, "csv")
+
+    def _save_bars(self, raw: dict[str, dict[datetime, "TickEvent"]], suffix: str) -> None:
+        os.makedirs("results", exist_ok=True)
+        for symbol, bars in raw.items():
+            path = os.path.join("results", f"{symbol}_{suffix}.csv")
+            with open(path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+                for ts in sorted(bars):
+                    bar = bars[ts]
+                    writer.writerow([ts.strftime("%Y-%m-%d"), bar.open, bar.high, bar.low, bar.close, bar.volume])
 
     def _load(self, symbol: str, path: str, date_format: str) -> dict[datetime, TickEvent]:
         result: dict[datetime, TickEvent] = {}

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from trading.base.strategy_params import StrategyParams
+
 from ..events import BarBundleEvent, Event, SignalBundleEvent, TickEvent
 
 
@@ -21,6 +23,22 @@ class StrategyBase(ABC):
 
 
 class Strategy(StrategyBase):
+    strategy_params: StrategyParams
+
+    def __init__(
+        self,
+        emit:     Callable[[Event], None],
+        get_bars: Callable[[str, int], list[TickEvent]],
+        strategy_params: StrategyParams
+    ):
+        super().__init__(emit, get_bars)
+        self.strategy_params = strategy_params
+        self._init(strategy_params)
+
+    @property
+    def symbols(self) -> list[str]:
+        return self.strategy_params.symbols
+
     def get_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         return self._get_bars(symbol, n)
 
@@ -28,6 +46,10 @@ class Strategy(StrategyBase):
         result = self.calculate_signals(event)
         if result is not None:
             self._emit(result)
+
+    @abstractmethod
+    def _init(self, strategy_params: StrategyParams):
+        ...
 
     @abstractmethod
     def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:

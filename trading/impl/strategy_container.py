@@ -1,5 +1,7 @@
 from typing import Callable
 
+from trading.base.strategy_params import StrategyParams
+
 from ..base.strategy import StrategyBase
 from ..events import BarBundleEvent, Event, TickEvent
 
@@ -18,10 +20,24 @@ class StrategyContainer(StrategyBase):
         super().__init__(emit, get_bars)
         self._strategies: list[StrategyBase] = []
 
-    def add(self, strategy_class: type[StrategyBase], /, **kwargs) -> None:
+    @property
+    def symbols(self) -> list[str]:
+        """Union of symbols across all contained strategies (order-preserving, deduplicated)."""
+        seen: set[str] = set()
+        result: list[str] = []
+        for s in self._strategies:
+            for sym in getattr(s, "symbols", []):
+                if sym not in seen:
+                    seen.add(sym)
+                    result.append(sym)
+        return result
+
+    def add(self, strategy_class: type[StrategyBase], strategy_params: StrategyParams) -> None:
         """Factory: construct a strategy, injecting emit and get_bars as defaults."""
+        kwargs = {}
         kwargs.setdefault("emit", self._emit)
         kwargs.setdefault("get_bars", self._get_bars)
+        kwargs.setdefault("strategy_params", strategy_params)
         self._strategies.append(strategy_class(**kwargs))
 
     def add_strategy(self, strategy: StrategyBase) -> None:
