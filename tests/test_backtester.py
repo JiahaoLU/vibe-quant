@@ -43,7 +43,7 @@ def test_signal_bundle_routes_to_portfolio():
     portfolio = MagicMock()
     execution = MagicMock()
 
-    sig = SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 2), signal_type="LONG")
+    sig = SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 2), signal=1.0)
     bundle = SignalBundleEvent(timestamp=datetime(2020, 1, 2), signals={"AAPL": sig})
     events.put(bundle)
 

@@ -16,7 +16,7 @@ def test_bar_bundle_event_type():
 
 
 def test_signal_bundle_event_type():
-    sig = SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 2), signal_type="LONG")
+    sig = SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 2), signal=1.0)
     e = SignalBundleEvent(timestamp=datetime(2020, 1, 2), signals={"AAPL": sig})
     assert e.type == EventType.SIGNAL_BUNDLE
 

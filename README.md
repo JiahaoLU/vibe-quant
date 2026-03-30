@@ -13,9 +13,9 @@ DataHandler → BarBundleEvent → StrategyContainer → SignalBundleEvent → P
 | Component | File | Responsibility |
 |---|---|---|
 | `DataHandler` | `trading/impl/multi_csv_data_handler.py` / `yahoo_data_handler.py` | Replays historical bars; emits `BarBundleEvent` |
-| `StrategyContainer` | `trading/impl/strategy_container.py` | Holds and dispatches to one or more `Strategy` instances |
-| `Strategy` | `strategies/sma_crossover_strategy.py` | Consumes bar bundles; emits `SignalBundleEvent` |
-| `Portfolio` | `trading/impl/simple_portfolio.py` | Sizes positions; emits `OrderEvent`; tracks equity |
+| `StrategyContainer` | `trading/impl/strategy_container.py` | Aggregates weighted signals from all strategies; emits one `SignalBundleEvent` per bar |
+| `Strategy` | `strategies/sma_crossover_strategy.py` | Consumes bar bundles; returns `SignalBundleEvent` with normalised float weights |
+| `Portfolio` | `trading/impl/simple_portfolio.py` | Rebalances to target weights; emits `OrderEvent`; tracks equity |
 | `ExecutionHandler` | `trading/impl/simulated_execution_handler.py` | Simulates fills; emits `FillEvent` |
 | `Backtester` | `trading/backtester.py` | Owns the event queue; drives the main loop |
 
@@ -24,7 +24,11 @@ DataHandler → BarBundleEvent → StrategyContainer → SignalBundleEvent → P
 ```
 BarBundleEvent    timestamp, bars: dict[symbol → TickEvent]
 SignalBundleEvent timestamp, signals: dict[symbol → SignalEvent]
-SignalEvent       symbol, timestamp, signal_type (LONG | EXIT), strength  [value type, not queued]
+SignalEvent       symbol, timestamp, signal: float  [value type, not queued]
+                    signal > 0  long  (fraction of nominal allocated to this symbol)
+                    signal = 0  exit / flat
+                    signal < 0  short (clamped to 0 by SimplePortfolio — no shorts)
+                    sum of signals across one bundle should be ≤ 1
 OrderEvent        timestamp, symbol, order_type, direction (BUY | SELL), quantity, reference_price
 FillEvent         timestamp, symbol, direction, quantity, fill_price, commission
 ```
@@ -92,35 +96,50 @@ Create a new file in `strategies/` and subclass `Strategy`:
 
 ```python
 # strategies/my_strategy.py
+from dataclasses import dataclass
 from trading.base.strategy import Strategy
 from trading.base.strategy_params import StrategyParams
 from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent
-from dataclasses import dataclass
 
 @dataclass
 class MyStrategyParams(StrategyParams):
-    symbols: list[str]
-    lookback: int = 20
+    symbols:  list[str]
+    lookback: int   = 20
+    nominal:  float = 5_000.0   # cash this strategy controls
 
 class MyStrategy(Strategy):
     def _init(self, strategy_params: StrategyParams):
         self._lookback = strategy_params.lookback  # type: ignore[attr-defined]
 
     def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
-        signals = {}
+        active = []
         for symbol in self.symbols:
             bars = self.get_bars(symbol, self._lookback)
             if len(bars) < self._lookback:
                 continue
-            # ... compute indicator, populate signals ...
-        return SignalBundleEvent(timestamp=event.timestamp, signals=signals) if signals else None
+            # ... decide if symbol should be long ...
+            # active.append(symbol)
+
+        if not active:
+            return None
+
+        # Normalise so positive weights sum to 1
+        weight = 1.0 / len(active)
+        signals = {
+            s: SignalEvent(symbol=s, timestamp=event.timestamp,
+                           signal=weight if s in active else 0.0)
+            for s in self.symbols
+        }
+        return SignalBundleEvent(timestamp=event.timestamp, signals=signals)
 ```
+
+`signal` is a float target weight: `> 0` = long, `0` = exit, `< 0` = short (blocked by portfolio). Weights across one bundle should sum to ≤ 1 so the strategy never over-allocates its nominal.
 
 Then register it in `run_backtest.py`:
 
 ```python
 from strategies.my_strategy import MyStrategy, MyStrategyParams
-strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20))
+strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20, nominal=5_000.0))
 ```
 
 ## Project structure

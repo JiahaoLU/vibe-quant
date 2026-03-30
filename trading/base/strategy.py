@@ -18,7 +18,7 @@ class StrategyBase(ABC):
 
     @abstractmethod
     def get_signals(self, event: BarBundleEvent) -> None:
-        """Process a bar bundle. May emit zero or more SignalBundleEvents."""
+        """Process a bar bundle. Emit zero or more SignalBundleEvents."""
         ...
 
 

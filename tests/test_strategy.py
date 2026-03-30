@@ -34,7 +34,7 @@ def test_strategy_abc_exposes_get_bars():
 def test_get_signals_emits_when_calculate_signals_returns_bundle():
     ts = datetime(2020, 1, 2)
     tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
-    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal_type="LONG")
+    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)
     result = SignalBundleEvent(timestamp=ts, signals={"AAPL": sig})
 
     class _Stub(Strategy):
@@ -86,7 +86,7 @@ def test_long_signal_when_fast_above_slow():
     strategy.get_signals(_bundle(["AAPL"], close=110.0))
     assert len(collected) == 1
     assert isinstance(collected[0], SignalBundleEvent)
-    assert collected[0].signals["AAPL"].signal_type == "LONG"
+    assert collected[0].signals["AAPL"].signal > 0.0
 
 
 def test_no_duplicate_long_signal():
@@ -112,11 +112,11 @@ def test_exit_signal_when_fast_below_slow():
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
     )
     strategy.get_signals(_bundle(["AAPL"], close=110.0))
-    assert collected[-1].signals["AAPL"].signal_type == "LONG"
+    assert collected[-1].signals["AAPL"].signal > 0.0
 
     current_bars = _bars([110.0] * 20 + [90.0] * 10)
     strategy.get_signals(_bundle(["AAPL"], close=90.0))
-    assert collected[-1].signals["AAPL"].signal_type == "EXIT"
+    assert collected[-1].signals["AAPL"].signal == 0.0
 
 
 def test_no_signal_when_flat():
@@ -144,8 +144,9 @@ def test_multi_symbol_signals_are_independent():
     )
     strategy.get_signals(_bundle(["AAPL", "MSFT"]))
     assert len(collected) == 1
-    assert "AAPL" in collected[0].signals
-    assert "MSFT" not in collected[0].signals
+    assert collected[0].signals["AAPL"].signal > 0.0
+    # MSFT is included in the bundle with 0 weight (strategy emits all symbols on change)
+    assert collected[0].signals.get("MSFT", SignalEvent("MSFT", collected[0].timestamp, 0.0)).signal == 0.0
 
 
 def test_no_emission_when_no_symbol_signals():

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Literal
+from typing import Literal  # noqa: F401 — kept for OrderEvent/FillEvent
 
 
 class EventType(Enum):
@@ -36,10 +36,9 @@ class BarBundleEvent(Event):
 
 @dataclass
 class SignalEvent:               # value type — not an Event subclass, not queued directly
-    symbol:      str
-    timestamp:   datetime
-    signal_type: Literal["LONG", "EXIT"]
-    strength:    float = 1.0
+    symbol:    str
+    timestamp: datetime
+    signal:    float             # target weight in [-1, 1]; sum across bundle ≤ 1; >0 long, <0 short, =0 exit
 
 
 @dataclass

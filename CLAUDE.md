@@ -22,20 +22,32 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 - **ABCs are load-bearing.** `DataHandler`, `StrategyBase`, `Strategy`, `Portfolio`, `ExecutionHandler` are abstract base classes in `trading/base/`. `StrategyBase` defines the shared wiring; `Strategy` adds the researcher-facing `calculate_signals` interface. Concrete implementations live in `trading/impl/`.
 - **No pandas in the hot loop.** The event loop operates on plain Python dicts and lists. Pandas is only for post-run analysis.
 
+## Signal model
+
+`SignalEvent.signal` is a `float` target weight in `[-1, 1]`:
+- `> 0` — long; the value is the fraction of the strategy's nominal to allocate to this symbol
+- `= 0` — exit / flat
+- `< 0` — short (currently prohibited by `SimplePortfolio`, which clamps to 0)
+
+**The sum of positive signals across a `SignalBundleEvent` should be ≤ 1** so the strategy never over-allocates its nominal. When multiple symbols are active, divide equally (or by your own weights).
+
+`StrategyContainer` aggregates one bundle per bar by combining all strategies' carry-forward signals weighted by `StrategyParams.nominal`.  `SimplePortfolio` then rebalances to `target_qty = int(signal × initial_capital / price)`.
+
 ## Adding a new strategy
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
 2. Implement `calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None` — return a `SignalBundleEvent` when signals fire, `None` otherwise
-3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file for any strategy-specific configuration; `emit` and `get_bars` are injected by `StrategyContainer` automatically — do **not** override `__init__`
-4. Implement `_init(self, strategy_params: StrategyParams)` — extract strategy-specific config from the params object here; symbols are available as `self.symbols`
+3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file; set `nominal` to the cash amount this strategy should control.  `get_bars` is injected by `StrategyContainer` automatically — do **not** override `__init__`
+4. Implement `_init(self, strategy_params: StrategyParams)` — extract strategy-specific config here; symbols are available as `self.symbols`
 5. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
-6. Do **not** call `self._emit()` directly — return the bundle from `calculate_signals`; `get_signals` (inherited from `Strategy`) handles emission
-7. Export it from `trading/impl/__init__.py`
-8. Register it in `run_backtest.py`:
+6. **Return** the bundle from `calculate_signals`; do **not** call `self._emit()` — `StrategyContainer` calls `calculate_signals` directly and aggregates results before emitting
+7. When any position changes, **emit signals for all symbols** with normalised weights (sum of long signals ≤ 1) so the carry-forward in `StrategyContainer` stays consistent
+8. Export it from `trading/impl/__init__.py`
+9. Register it in `run_backtest.py`:
 
    ```python
    strategy = StrategyContainer(events.put, data.get_latest_bars)
-   strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, ...))
+   strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, nominal=5000.0, ...))
    ```
 
 ## Adding a new component type (e.g. RiskManager)
