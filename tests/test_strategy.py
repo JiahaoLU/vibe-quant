@@ -1,6 +1,7 @@
 from datetime import datetime
 from trading.base.strategy import Strategy
-from strategies.sma_crossover_strategy import SMACrossoverStrategy
+from trading.base.strategy_params import StrategyParams
+from strategies.sma_crossover_strategy import SMACrossoverStrategy, SMACrossoverStrategyParams
 from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 
@@ -22,10 +23,11 @@ def test_strategy_abc_exposes_get_bars():
     tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
 
     class _Stub(Strategy):
+        def _init(self, strategy_params): pass
         def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
             return None
 
-    stub = _Stub(emit=lambda e: None, get_bars=lambda s, n: [tick])
+    stub = _Stub(emit=lambda e: None, get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
     assert stub.get_bars("AAPL", 1) == [tick]
 
 
@@ -36,11 +38,12 @@ def test_get_signals_emits_when_calculate_signals_returns_bundle():
     result = SignalBundleEvent(timestamp=ts, signals={"AAPL": sig})
 
     class _Stub(Strategy):
+        def _init(self, strategy_params): pass
         def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
             return result
 
     collected = []
-    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick])
+    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
     stub.get_signals(_bundle(["AAPL"]))
     assert collected == [result]
 
@@ -50,11 +53,12 @@ def test_get_signals_does_not_emit_when_calculate_signals_returns_none():
     tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
 
     class _Stub(Strategy):
+        def _init(self, strategy_params): pass
         def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
             return None
 
     collected = []
-    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick])
+    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
     stub.get_signals(_bundle(["AAPL"]))
     assert collected == []
 
@@ -62,7 +66,11 @@ def test_get_signals_does_not_emit_when_calculate_signals_returns_none():
 def test_no_signal_before_enough_history():
     collected = []
     bars = _bars([100.0] * 5)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=lambda s, n: bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL"]))
     assert collected == []
 
@@ -70,7 +78,11 @@ def test_no_signal_before_enough_history():
 def test_long_signal_when_fast_above_slow():
     collected = []
     bars = _bars([90.0] * 20 + [110.0] * 10)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=lambda s, n: bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL"], close=110.0))
     assert len(collected) == 1
     assert isinstance(collected[0], SignalBundleEvent)
@@ -80,7 +92,11 @@ def test_long_signal_when_fast_above_slow():
 def test_no_duplicate_long_signal():
     collected = []
     bars = _bars([90.0] * 20 + [110.0] * 10)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=lambda s, n: bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL"], close=110.0))
     assert len(collected) == 1
     strategy.get_signals(_bundle(["AAPL"], close=110.0))
@@ -90,7 +106,11 @@ def test_no_duplicate_long_signal():
 def test_exit_signal_when_fast_below_slow():
     collected = []
     current_bars = _bars([90.0] * 20 + [110.0] * 10)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: current_bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=lambda s, n: current_bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL"], close=110.0))
     assert collected[-1].signals["AAPL"].signal_type == "LONG"
 
@@ -102,7 +122,11 @@ def test_exit_signal_when_fast_below_slow():
 def test_no_signal_when_flat():
     collected = []
     bars = _bars([100.0] * 30)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=lambda s, n: bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL"]))
     assert collected == []
 
@@ -113,7 +137,11 @@ def test_multi_symbol_signals_are_independent():
         if symbol == "AAPL":
             return _bars([90.0] * 20 + [110.0] * 10)
         return _bars([100.0] * 30)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL", "MSFT"], get_bars=get_bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=get_bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL", "MSFT"]))
     assert len(collected) == 1
     assert "AAPL" in collected[0].signals
@@ -123,7 +151,11 @@ def test_multi_symbol_signals_are_independent():
 def test_no_emission_when_no_symbol_signals():
     collected = []
     bars = _bars([100.0] * 30)
-    strategy = SMACrossoverStrategy(collected.append, ["AAPL", "MSFT"], get_bars=lambda s, n: bars, fast=10, slow=30)
+    strategy = SMACrossoverStrategy(
+        collected.append,
+        get_bars=lambda s, n: bars,
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], fast=10, slow=30),
+    )
     strategy.get_signals(_bundle(["AAPL", "MSFT"]))
     assert collected == []
 

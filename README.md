@@ -7,15 +7,16 @@ A minimal, extensible event-driven trading engine and backtester written in pure
 All components communicate through an `emit: Callable[[Event], None]` injected at construction — no direct cross-component calls. The concrete `queue.Queue` is owned by `run_backtest.py` and `Backtester` only.
 
 ```
-DataHandler → BarBundleEvent → Strategy → SignalBundleEvent → Portfolio → OrderEvent → ExecutionHandler → FillEvent → Portfolio
+DataHandler → BarBundleEvent → StrategyContainer → SignalBundleEvent → Portfolio → OrderEvent → ExecutionHandler → FillEvent → Portfolio
 ```
 
 | Component | File | Responsibility |
 |---|---|---|
-| `DataHandler` | `trading/impl/data.py` | Replays historical bars; emits `BarBundleEvent` |
-| `Strategy` | `trading/impl/strategy.py` | Consumes bar bundles; emits `SignalBundleEvent` |
-| `Portfolio` | `trading/impl/portfolio.py` | Sizes positions; emits `OrderEvent`; tracks equity |
-| `ExecutionHandler` | `trading/impl/execution.py` | Simulates fills; emits `FillEvent` |
+| `DataHandler` | `trading/impl/multi_csv_data_handler.py` / `yahoo_data_handler.py` | Replays historical bars; emits `BarBundleEvent` |
+| `StrategyContainer` | `trading/impl/strategy_container.py` | Holds and dispatches to one or more `Strategy` instances |
+| `Strategy` | `strategies/sma_crossover_strategy.py` | Consumes bar bundles; emits `SignalBundleEvent` |
+| `Portfolio` | `trading/impl/simple_portfolio.py` | Sizes positions; emits `OrderEvent`; tracks equity |
+| `ExecutionHandler` | `trading/impl/simulated_execution_handler.py` | Simulates fills; emits `FillEvent` |
 | `Backtester` | `trading/backtester.py` | Owns the event queue; drives the main loop |
 
 ### Event types
@@ -44,7 +45,7 @@ python -m ipykernel install --user --name=vibe-quant
 # 4. Run the backtest
 python run_backtest.py
 
-# 6. Visualize results (select the "vibe-quant" kernel in the notebook)
+# 5. Visualize results (select the "vibe-quant" kernel in the notebook)
 jupyter notebook plot_results.ipynb
 ```
 
@@ -63,8 +64,9 @@ Equity curve    : results/equity_curve.csv
 Edit the constants at the top of `run_backtest.py`:
 
 ```python
-SYMBOLS         = ["AAPL"]                   # add more symbols to trade multiple
-CSV_PATHS       = ["data/sample_data.csv"]   # one CSV per symbol, same order
+SYMBOLS         = ["AAPL", "MSFT"]   # symbols to fetch and trade
+START           = "2020-01-01"        # backtest start date (Yahoo data)
+END             = "2022-01-01"        # backtest end date
 INITIAL_CAPITAL = 10_000.0
 FAST_WINDOW     = 10      # SMA crossover fast period
 SLOW_WINDOW     = 30      # SMA crossover slow period
@@ -74,7 +76,7 @@ SLIPPAGE_PCT    = 0.0005  # 0.05% per fill
 
 ## CSV format
 
-`data/sample_data.csv` must have these columns (header required):
+When using `MultiCSVDataHandler` instead of `YahooDataHandler`, each symbol CSV must have these columns (header required):
 
 ```
 timestamp,open,high,low,close,volume
@@ -86,42 +88,39 @@ Default date format is `%Y-%m-%d`. Override via `date_format` on `MultiCSVDataHa
 
 ## Implementing a custom strategy
 
-Create a new file in `trading/impl/` and subclass `Strategy`:
+Create a new file in `strategies/` and subclass `Strategy`:
 
 ```python
-# trading/impl/my_strategy.py
-from typing import Callable
-from ..base.strategy import Strategy
-from ..events import BarBundleEvent, Event, SignalBundleEvent, SignalEvent, TickEvent
+# strategies/my_strategy.py
+from trading.base.strategy import Strategy
+from trading.base.strategy_params import StrategyParams
+from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent
+from dataclasses import dataclass
+
+@dataclass
+class MyStrategyParams(StrategyParams):
+    symbols: list[str]
+    lookback: int = 20
 
 class MyStrategy(Strategy):
-    def __init__(
-        self,
-        emit:     Callable[[Event], None],
-        symbols:  list[str],
-        get_bars: Callable[[str, int], list[TickEvent]],
-    ):
-        super().__init__(emit, get_bars)
-        self._symbols = symbols
+    def _init(self, strategy_params: StrategyParams):
+        self._lookback = strategy_params.lookback  # type: ignore[attr-defined]
 
     def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
         signals = {}
-        for symbol in self._symbols:
-            bars = self.get_bars(symbol, 50)
-            # ... compute indicator ...
-            signals[symbol] = SignalEvent(
-                symbol=symbol,
-                timestamp=event.timestamp,
-                signal_type="LONG",
-            )
+        for symbol in self.symbols:
+            bars = self.get_bars(symbol, self._lookback)
+            if len(bars) < self._lookback:
+                continue
+            # ... compute indicator, populate signals ...
         return SignalBundleEvent(timestamp=event.timestamp, signals=signals) if signals else None
 ```
 
-Then swap it into `run_backtest.py`:
+Then register it in `run_backtest.py`:
 
 ```python
-from trading.impl.my_strategy import MyStrategy
-strategy = MyStrategy(events.put, SYMBOLS, data.get_latest_bars)
+from strategies.my_strategy import MyStrategy, MyStrategyParams
+strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20))
 ```
 
 ## Project structure
@@ -130,23 +129,31 @@ strategy = MyStrategy(events.put, SYMBOLS, data.get_latest_bars)
 .
 ├── trading/
 │   ├── base/
-│   │   ├── data.py          # DataHandler ABC
-│   │   ├── strategy.py      # Strategy ABC
-│   │   ├── portfolio.py     # Portfolio ABC
-│   │   └── execution.py     # ExecutionHandler ABC
+│   │   ├── data.py                     # DataHandler ABC
+│   │   ├── strategy.py                 # StrategyBase + Strategy ABCs
+│   │   ├── strategy_params.py          # StrategyParams base dataclass
+│   │   ├── portfolio.py                # Portfolio ABC
+│   │   └── execution.py               # ExecutionHandler ABC
 │   ├── impl/
-│   │   ├── data.py          # MultiCSVDataHandler
-│   │   ├── strategy.py      # SMACrossoverStrategy
-│   │   ├── portfolio.py     # SimplePortfolio
-│   │   └── execution.py     # SimulatedExecutionHandler
-│   ├── events.py            # all event dataclasses + EventType enum
-│   └── backtester.py        # event loop
+│   │   ├── multi_csv_data_handler.py   # CSV-backed data handler
+│   │   ├── yahoo_data_handler.py       # Yahoo Finance data handler
+│   │   ├── strategy_container.py       # Holds + dispatches to strategies
+│   │   ├── simple_portfolio.py         # SimplePortfolio
+│   │   └── simulated_execution_handler.py
+│   ├── events.py                       # all event dataclasses + EventType enum
+│   └── backtester.py                   # event loop
+├── strategies/
+│   └── sma_crossover_strategy.py       # SMACrossoverStrategy
+├── external/
+│   └── yahoo.py                        # fetch_daily_bars (yfinance wrapper)
 ├── data/
-│   └── sample_data.csv
+│   ├── AAPL.csv
+│   └── MSFT.csv
 ├── results/
 │   └── equity_curve.csv
-├── run_backtest.py          # entry point
-├── plot_results.ipynb       # equity curve, drawdown, trade markers, summary stats
+├── tests/
+├── run_backtest.py                      # entry point + configuration
+├── plot_results.ipynb                   # equity curve, drawdown, trade markers
 └── requirements.txt
 ```
 
@@ -156,8 +163,9 @@ Python 3.10+ (uses `match` statement).
 
 | Package | Purpose |
 |---|---|
+| `yfinance` | `YahooDataHandler` — fetches OHLCV data from Yahoo Finance |
 | `matplotlib>=3.7` | `plot_results.ipynb` — equity curve, drawdown, trade markers |
-| `ipykernel` | Registers the venv as a Jupyter kernel (`claude-learn`) |
+| `ipykernel` | Registers the venv as a Jupyter kernel (`vibe-quant`) |
 | `pytest>=7.0` | Test suite (`tests/`) |
 | `pandas>=2.0` | Optional — cleaner post-run analysis (not used yet) |
 
@@ -166,6 +174,5 @@ Install: `pip install -r requirements.txt`
 ## Extension points
 
 - **RiskManager** — insert between Portfolio and Execution to enforce max drawdown / position limits
-- **Live trading** — replace `MultiCSVDataHandler` with a streaming data source; replace `SimulatedExecutionHandler` with a broker API client
+- **Live trading** — replace `YahooDataHandler` with a streaming data source; replace `SimulatedExecutionHandler` with a broker API client
 - **PerformanceAnalyzer** — consume the equity curve to compute Sharpe ratio, max drawdown, CAGR
-

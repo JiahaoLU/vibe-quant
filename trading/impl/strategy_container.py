@@ -32,12 +32,13 @@ class StrategyContainer(StrategyBase):
                     result.append(sym)
         return result
 
-    def add(self, strategy_class: type[StrategyBase], strategy_params: StrategyParams) -> None:
+    def add(self, strategy_class: type[StrategyBase], strategy_params: StrategyParams, *, emit=None, get_bars=None) -> None:
         """Factory: construct a strategy, injecting emit and get_bars as defaults."""
-        kwargs = {}
-        kwargs.setdefault("emit", self._emit)
-        kwargs.setdefault("get_bars", self._get_bars)
-        kwargs.setdefault("strategy_params", strategy_params)
+        kwargs = {
+            "emit":            emit     if emit     is not None else self._emit,
+            "get_bars":        get_bars if get_bars is not None else self._get_bars,
+            "strategy_params": strategy_params,
+        }
         self._strategies.append(strategy_class(**kwargs))
 
     def add_strategy(self, strategy: StrategyBase) -> None:

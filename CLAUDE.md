@@ -26,15 +26,16 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
 2. Implement `calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None` — return a `SignalBundleEvent` when signals fire, `None` otherwise
-3. Accept `symbols: list[str]` (and any other strategy-specific params) in the constructor; call `super().__init__(emit, get_bars)` — `emit` and `get_bars` are injected by `StrategyContainer` automatically
-4. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
-5. Do **not** call `self._emit()` directly — return the bundle from `calculate_signals`; `get_signals` (inherited from `Strategy`) handles emission
-6. Export it from `trading/impl/__init__.py`
-7. Register it in `run_backtest.py`:
+3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file for any strategy-specific configuration; `emit` and `get_bars` are injected by `StrategyContainer` automatically — do **not** override `__init__`
+4. Implement `_init(self, strategy_params: StrategyParams)` — extract strategy-specific config from the params object here; symbols are available as `self.symbols`
+5. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
+6. Do **not** call `self._emit()` directly — return the bundle from `calculate_signals`; `get_signals` (inherited from `Strategy`) handles emission
+7. Export it from `trading/impl/__init__.py`
+8. Register it in `run_backtest.py`:
 
    ```python
    strategy = StrategyContainer(events.put, data.get_latest_bars)
-   strategy.add(MyStrategy, symbols=SYMBOLS)
+   strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, ...))
    ```
 
 ## Adding a new component type (e.g. RiskManager)
