@@ -2,11 +2,11 @@ from typing import Callable
 
 from trading.base.strategy_params import StrategyParams
 
-from ..base.strategy import Strategy, StrategyBase
+from ..base.strategy import Strategy, StrategySignalGenerator
 from ..events import BarBundleEvent, Event, SignalBundleEvent, SignalEvent, TickEvent
 
 
-class StrategyContainer(StrategyBase):
+class StrategyContainer(StrategySignalGenerator):
     """
     Holds multiple strategies, dispatches BarBundleEvents to each via calculate_signals,
     then aggregates their results into a single weighted SignalBundleEvent.
@@ -16,6 +16,12 @@ class StrategyContainer(StrategyBase):
     that returns None this bar still contributes its previous target weights.
     One combined SignalBundleEvent is emitted per bar whenever at least one
     strategy has fired at least once.
+
+    Important: a strategy that has *never* fired (e.g. still warming up) has an
+    empty carry-forward and therefore contributes zero signal, but its nominal is
+    still included in total_nominal.  This means it dilutes all other strategies'
+    effective weight until it fires for the first time.  Register strategies only
+    when they are ready to produce signals, or accept this warm-up dilution.
     """
 
     def __init__(
@@ -23,7 +29,8 @@ class StrategyContainer(StrategyBase):
         emit:     Callable[[Event], None],
         get_bars: Callable[[str, int], list[TickEvent]],
     ):
-        super().__init__(emit, get_bars)
+        super().__init__(get_bars=get_bars)
+        self._emit_fn = emit
         self._strategies: list[tuple[Strategy, float]] = []   # (strategy, nominal)
         self._carried:    list[dict[str, float]]        = []   # parallel; symbol → last signal
 
@@ -39,6 +46,9 @@ class StrategyContainer(StrategyBase):
                     result.append(sym)
         return result
 
+    def emit(self, event: Event) -> None:
+        self._emit_fn(event)
+
     def add(
         self,
         strategy_class:  type[Strategy],
@@ -48,7 +58,6 @@ class StrategyContainer(StrategyBase):
     ) -> None:
         """Factory: construct a strategy and register it with its nominal."""
         instance = strategy_class(
-            emit=self._emit,
             get_bars=get_bars if get_bars is not None else self._get_bars,
             strategy_params=strategy_params,
         )
@@ -56,7 +65,12 @@ class StrategyContainer(StrategyBase):
         self._carried.append({})
 
     def add_strategy(self, strategy: Strategy, nominal: float = 1.0) -> None:
-        """Add a pre-constructed strategy instance with an explicit nominal."""
+        """Add a pre-constructed strategy instance with an explicit nominal.
+
+        Note: the container calls calculate_signals() directly and re-emits the
+        aggregated result through its own emit callable.  The strategy's on_get_signal
+        hook is still called, but signals are never emitted by the strategy itself.
+        """
         self._strategies.append((strategy, nominal))
         self._carried.append({})
 
@@ -64,6 +78,7 @@ class StrategyContainer(StrategyBase):
         any_new = False
         for i, (strategy, _) in enumerate(self._strategies):
             result = strategy.calculate_signals(event)
+            strategy.on_get_signal(result)
             if result is not None:
                 any_new = True
                 for symbol, sig in result.signals.items():
@@ -84,7 +99,7 @@ class StrategyContainer(StrategyBase):
         if not combined:
             return
 
-        self._emit(SignalBundleEvent(
+        self.emit(SignalBundleEvent(
             timestamp=event.timestamp,
             signals={
                 symbol: SignalEvent(symbol=symbol, timestamp=event.timestamp, signal=val)

@@ -27,138 +27,108 @@ def test_strategy_abc_exposes_get_bars():
         def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
             return None
 
-    stub = _Stub(emit=lambda e: None, get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
+    stub = _Stub(get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
     assert stub.get_bars("AAPL", 1) == [tick]
 
 
-def test_get_signals_emits_when_calculate_signals_returns_bundle():
+def test_on_get_signal_default_is_noop():
+    """Default on_get_signal implementation does nothing and accepts None."""
+    class _Stub(Strategy):
+        def _init(self, strategy_params): pass
+        def calculate_signals(self, event): return None
+
+    stub = _Stub(get_bars=lambda s, n: [], strategy_params=StrategyParams(symbols=["AAPL"]))
+    stub.on_get_signal(None)   # must not raise
     ts = datetime(2020, 1, 2)
-    tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
     sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)
-    result = SignalBundleEvent(timestamp=ts, signals={"AAPL": sig})
-
-    class _Stub(Strategy):
-        def _init(self, strategy_params): pass
-        def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
-            return result
-
-    collected = []
-    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
-    stub.get_signals(_bundle(["AAPL"]))
-    assert collected == [result]
-
-
-def test_get_signals_does_not_emit_when_calculate_signals_returns_none():
-    ts = datetime(2020, 1, 2)
-    tick = TickEvent(symbol="AAPL", timestamp=ts, open=1.0, high=1.0, low=1.0, close=1.0, volume=1.0)
-
-    class _Stub(Strategy):
-        def _init(self, strategy_params): pass
-        def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
-            return None
-
-    collected = []
-    stub = _Stub(emit=collected.append, get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
-    stub.get_signals(_bundle(["AAPL"]))
-    assert collected == []
+    bundle = SignalBundleEvent(timestamp=ts, signals={"AAPL": sig})
+    stub.on_get_signal(bundle)  # must not raise
 
 
 def test_no_signal_before_enough_history():
-    collected = []
     bars = _bars([100.0] * 5)
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=lambda s, n: bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL"]))
-    assert collected == []
+    result = strategy.calculate_signals(_bundle(["AAPL"]))
+    assert result is None
 
 
 def test_long_signal_when_fast_above_slow():
-    collected = []
     bars = _bars([90.0] * 20 + [110.0] * 10)
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=lambda s, n: bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL"], close=110.0))
-    assert len(collected) == 1
-    assert isinstance(collected[0], SignalBundleEvent)
-    assert collected[0].signals["AAPL"].signal > 0.0
+    result = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
+    assert result is not None
+    assert isinstance(result, SignalBundleEvent)
+    assert result.signals["AAPL"].signal > 0.0
 
 
 def test_no_duplicate_long_signal():
-    collected = []
     bars = _bars([90.0] * 20 + [110.0] * 10)
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=lambda s, n: bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL"], close=110.0))
-    assert len(collected) == 1
-    strategy.get_signals(_bundle(["AAPL"], close=110.0))
-    assert len(collected) == 1  # no second emit
+    result1 = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
+    assert result1 is not None
+    result2 = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
+    assert result2 is None  # no second emit on unchanged position
 
 
 def test_exit_signal_when_fast_below_slow():
-    collected = []
     current_bars = _bars([90.0] * 20 + [110.0] * 10)
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=lambda s, n: current_bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL"], close=110.0))
-    assert collected[-1].signals["AAPL"].signal > 0.0
+    result1 = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
+    assert result1 is not None
+    assert result1.signals["AAPL"].signal > 0.0
 
     current_bars = _bars([110.0] * 20 + [90.0] * 10)
-    strategy.get_signals(_bundle(["AAPL"], close=90.0))
-    assert collected[-1].signals["AAPL"].signal == 0.0
+    result2 = strategy.calculate_signals(_bundle(["AAPL"], close=90.0))
+    assert result2 is not None
+    assert result2.signals["AAPL"].signal == 0.0
 
 
 def test_no_signal_when_flat():
-    collected = []
     bars = _bars([100.0] * 30)
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=lambda s, n: bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL"]))
-    assert collected == []
+    result = strategy.calculate_signals(_bundle(["AAPL"]))
+    assert result is None
 
 
 def test_multi_symbol_signals_are_independent():
-    collected = []
     def get_bars(symbol, n):
         if symbol == "AAPL":
             return _bars([90.0] * 20 + [110.0] * 10)
         return _bars([100.0] * 30)
+
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=get_bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL", "MSFT"]))
-    assert len(collected) == 1
-    assert collected[0].signals["AAPL"].signal > 0.0
-    # MSFT is included in the bundle with 0 weight (strategy emits all symbols on change)
-    assert collected[0].signals.get("MSFT", SignalEvent("MSFT", collected[0].timestamp, 0.0)).signal == 0.0
+    result = strategy.calculate_signals(_bundle(["AAPL", "MSFT"]))
+    assert result is not None
+    assert result.signals["AAPL"].signal > 0.0
+    assert result.signals["MSFT"].signal == 0.0
 
 
 def test_no_emission_when_no_symbol_signals():
-    collected = []
     bars = _bars([100.0] * 30)
     strategy = SMACrossoverStrategy(
-        collected.append,
         get_bars=lambda s, n: bars,
         strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], fast=10, slow=30),
     )
-    strategy.get_signals(_bundle(["AAPL", "MSFT"]))
-    assert collected == []
+    result = strategy.calculate_signals(_bundle(["AAPL", "MSFT"]))
+    assert result is None
 
 
 def test_strategy_is_subclass_of_strategy_base():
@@ -166,12 +136,12 @@ def test_strategy_is_subclass_of_strategy_base():
     assert issubclass(Strategy, StrategyBase)
 
 
-def test_strategy_base_get_signals_is_abstract():
-    from trading.base.strategy import StrategyBase
+def test_strategy_is_abstract():
+    """Strategy cannot be instantiated without implementing calculate_signals and _init."""
     import pytest
 
-    class _NoImpl(StrategyBase):
+    class _NoImpl(Strategy):
         pass
 
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        _NoImpl(emit=lambda e: None, get_bars=lambda s, n: [])
+        _NoImpl(get_bars=lambda s, n: [], strategy_params=StrategyParams(symbols=[]))

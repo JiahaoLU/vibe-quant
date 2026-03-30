@@ -17,9 +17,9 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 ## Architecture rules
 
-- **No direct cross-component calls.** All component communication goes through the `emit: Callable[[Event], None]` callable injected at construction. The concrete queue is owned by `run_backtest.py` and `Backtester`; components never import or reference `queue.Queue` directly. `Portfolio` and `Strategy` both receive a `get_bars: Callable[[str, int], list[TickEvent]]` callable instead of a full `DataHandler` reference.
+- **No direct cross-component calls.** All component communication goes through the `emit: Callable[[Event], None]` callable injected at construction. The concrete queue is owned by `run_backtest.py` and `Backtester`; components never import or reference `queue.Queue` directly. `Portfolio` and `StrategyContainer` receive `emit`; `Strategy` and `Portfolio` receive a `get_bars: Callable[[str, int], list[TickEvent]]` callable instead of a full `DataHandler` reference. `Strategy` does **not** receive `emit` — it returns bundles from `calculate_signals` and the container aggregates them.
 - **Event ownership:** each component owns exactly one stage of the pipeline. Strategy never touches orders. Portfolio never touches indicators.
-- **ABCs are load-bearing.** `DataHandler`, `StrategyBase`, `Strategy`, `Portfolio`, `ExecutionHandler` are abstract base classes in `trading/base/`. `StrategyBase` defines the shared wiring; `Strategy` adds the researcher-facing `calculate_signals` interface. Concrete implementations live in `trading/impl/`.
+- **ABCs are load-bearing.** `DataHandler`, `StrategyBase`, `StrategySignalGenerator`, `Strategy`, `Portfolio`, `ExecutionHandler` are abstract base classes in `trading/base/`. `StrategyBase` provides `get_bars` injection and the abstract `symbols` property; `StrategySignalGenerator` adds the abstract `emit` and `get_signals` interface (implemented by `StrategyContainer`); `Strategy` adds the researcher-facing `calculate_signals` and `on_get_signal` hook. Concrete implementations live in `trading/impl/`.
 - **No pandas in the hot loop.** The event loop operates on plain Python dicts and lists. Pandas is only for post-run analysis.
 
 ## Signal model
@@ -37,10 +37,10 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
 2. Implement `calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None` — return a `SignalBundleEvent` when signals fire, `None` otherwise
-3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file; set `nominal` to the cash amount this strategy should control.  `get_bars` is injected by `StrategyContainer` automatically — do **not** override `__init__`
+3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file; set `nominal` to the cash amount this strategy should control — this is its weight relative to other strategies in the same `StrategyContainer` (default `1.0` gives equal weight).  `get_bars` is injected by `StrategyContainer` automatically — do **not** override `__init__`
 4. Implement `_init(self, strategy_params: StrategyParams)` — extract strategy-specific config here; symbols are available as `self.symbols`
 5. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
-6. **Return** the bundle from `calculate_signals`; do **not** call `self._emit()` — `StrategyContainer` calls `calculate_signals` directly and aggregates results before emitting
+6. **Return** the bundle from `calculate_signals`; `Strategy` has no `emit` — `StrategyContainer` calls `calculate_signals` directly and aggregates results before emitting
 7. When any position changes, **emit signals for all symbols** with normalised weights (sum of long signals ≤ 1) so the carry-forward in `StrategyContainer` stays consistent
 8. Export it from `trading/impl/__init__.py`
 9. Register it in `run_backtest.py`:

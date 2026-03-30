@@ -22,6 +22,8 @@ class SMACrossoverStrategy(Strategy):
 
     def _init(self, strategy_params: StrategyParams):
         self._symbols = strategy_params.symbols
+        self._fast = 10
+        self._slow = 30
         if isinstance(strategy_params, SMACrossoverStrategyParams):
             self._fast = strategy_params.fast
             self._slow = strategy_params.slow
@@ -63,3 +65,6 @@ class SMACrossoverStrategy(Strategy):
             for symbol in self._symbols
         }
         return SignalBundleEvent(timestamp=event.timestamp, signals=signals)
+    
+    def on_get_signal(self, result):
+        return super().on_get_signal(result)

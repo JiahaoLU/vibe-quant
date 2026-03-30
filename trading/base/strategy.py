@@ -7,31 +7,41 @@ from ..events import BarBundleEvent, Event, SignalBundleEvent, TickEvent
 
 
 class StrategyBase(ABC):
-    """Abstract base for trading strategies. Receives bar bundles and emits signals via the injected emit callable. get_bars provides read-only access to bar history for indicator calculation."""
-    def __init__(
-        self,
-        emit:     Callable[[Event], None],
-        get_bars: Callable[[str, int], list[TickEvent]],
-    ):
-        self._emit     = emit
+    """Common base for all strategy components. Provides get_bars injection and declares the symbols contract."""
+    def __init__(self, get_bars: Callable[[str, int], list[TickEvent]]):
         self._get_bars = get_bars
+
+    @property
+    @abstractmethod
+    def symbols(self) -> list[str]:
+        """All symbols this component operates on."""
+        ...
+
+
+class StrategySignalGenerator(StrategyBase):
+    """ABC for components that receive bar bundles and emit signal bundles."""
+
+    @abstractmethod
+    def emit(self, event: Event) -> None:
+        """Emit an event downstream."""
+        ...
 
     @abstractmethod
     def get_signals(self, event: BarBundleEvent) -> None:
-        """Process a bar bundle. Emit zero or more SignalBundleEvents."""
+        """Process a bar bundle and emit zero or more SignalBundleEvents."""
         ...
 
 
 class Strategy(StrategyBase):
+    """Researcher-facing base class. Implement calculate_signals and _init; override on_get_signal for custom post-signal logic."""
     strategy_params: StrategyParams
 
     def __init__(
         self,
-        emit:     Callable[[Event], None],
-        get_bars: Callable[[str, int], list[TickEvent]],
-        strategy_params: StrategyParams
+        get_bars:        Callable[[str, int], list[TickEvent]],
+        strategy_params: StrategyParams,
     ):
-        super().__init__(emit, get_bars)
+        super().__init__(get_bars=get_bars)
         self.strategy_params = strategy_params
         self._init(strategy_params)
 
@@ -42,10 +52,8 @@ class Strategy(StrategyBase):
     def get_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         return self._get_bars(symbol, n)
 
-    def get_signals(self, event: BarBundleEvent) -> None:
-        result = self.calculate_signals(event)
-        if result is not None:
-            self._emit(result)
+    def on_get_signal(self, result: SignalBundleEvent | None) -> None:
+        """Hook called after calculate_signals, whether or not a bundle was produced. Override for custom post-signal actions."""
 
     @abstractmethod
     def _init(self, strategy_params: StrategyParams):

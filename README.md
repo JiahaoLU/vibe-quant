@@ -149,7 +149,7 @@ strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20, nominal=
 ├── trading/
 │   ├── base/
 │   │   ├── data.py                     # DataHandler ABC
-│   │   ├── strategy.py                 # StrategyBase + Strategy ABCs
+│   │   ├── strategy.py                 # StrategyBase, StrategySignalGenerator, Strategy ABCs
 │   │   ├── strategy_params.py          # StrategyParams base dataclass
 │   │   ├── portfolio.py                # Portfolio ABC
 │   │   └── execution.py               # ExecutionHandler ABC

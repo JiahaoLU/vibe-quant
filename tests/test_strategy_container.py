@@ -41,6 +41,47 @@ def test_container_is_subclass_of_strategy_base():
     assert issubclass(StrategyContainer, StrategyBase)
 
 
+def test_container_is_subclass_of_strategy_signal_generator():
+    from trading.base.strategy import StrategySignalGenerator
+    assert issubclass(StrategyContainer, StrategySignalGenerator)
+
+
+def test_on_get_signal_called_even_when_calculate_signals_returns_none():
+    """Container calls on_get_signal with None when calculate_signals returns None."""
+    hook_calls = []
+
+    class _TrackHook(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event): return None
+        def on_get_signal(self, result): hook_calls.append(result)
+
+    container = StrategyContainer(emit=lambda e: None, get_bars=lambda s, n: [])
+    container.add(_TrackHook, StrategyParams(symbols=["AAPL"]))
+    container.get_signals(_bundle(["AAPL"]))
+    assert hook_calls == [None]
+
+
+def test_on_get_signal_called_with_bundle_when_signals_fire():
+    """Container calls on_get_signal with the bundle when calculate_signals returns one."""
+    hook_calls = []
+
+    class _TrackHook(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event):
+            ts = event.timestamp
+            return SignalBundleEvent(
+                timestamp=ts,
+                signals={"AAPL": SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)},
+            )
+        def on_get_signal(self, result): hook_calls.append(result)
+
+    container = StrategyContainer(emit=lambda e: None, get_bars=lambda s, n: [])
+    container.add(_TrackHook, StrategyParams(symbols=["AAPL"]))
+    container.get_signals(_bundle(["AAPL"]))
+    assert len(hook_calls) == 1
+    assert isinstance(hook_calls[0], SignalBundleEvent)
+
+
 def test_add_factory_emits_one_combined_bundle():
     """Container aggregates strategy results and emits exactly one SignalBundleEvent."""
     collected = []
@@ -69,7 +110,6 @@ def test_add_strategy_accepts_prebuilt_instance():
     """add_strategy registers a pre-constructed instance; its signals flow through the container."""
     container_emit = []
     strategy = _AlwaysLong(
-        emit=lambda e: None,
         get_bars=lambda s, n: [],
         strategy_params=StrategyParams(symbols=["AAPL"]),
     )
