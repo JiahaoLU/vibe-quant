@@ -19,6 +19,7 @@ def _strategy_bundle(symbol: str, signal: float, ts=None, strategy_id: str = "te
     return StrategyBundleEvent(
         timestamp=ts,
         combined={symbol: sig},
+        # per_strategy always populated — even on exit — so on_fill can attribute the SELL fill
         per_strategy={strategy_id: {symbol: 1.0}},
     )
 
@@ -375,7 +376,8 @@ def test_full_exit_fill_pnl_not_zero():
     portfolio.on_fill(_fill("AAPL", "SELL", 10, 120.0))
 
     pnl_after_sell = portfolio.equity_curve[-1]["strategy_pnl"]["s1"]
-    assert pnl_after_sell > pnl_after_buy   # sell proceeds increased PnL
+    # buy: -(10*100 + 1) = -1001; sell: -(-1*10*120 + 1) = +1199; net = 198.0
+    assert abs(pnl_after_sell - 198.0) < 1e-6
 
 
 def test_hold_fill_does_not_change_strategy_pnl():

@@ -96,6 +96,7 @@ class SimplePortfolio(Portfolio):
             self._cash -= multiplier * event.fill_price * event.quantity + event.commission
 
             # Apportion fill's cash impact across strategies
+            # commission is always a cost (positive); add it regardless of direction
             fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
             for strategy_id, symbol_weights in self._current_attribution.items():
                 share = symbol_weights.get(event.symbol, 0.0)
