@@ -213,3 +213,13 @@ def test_nominal_weights_combined_signal():
 
     assert len(collected) == 1
     assert abs(collected[0].signals["AAPL"].signal - 0.75) < 1e-9
+
+
+def test_strategy_params_name_defaults_to_empty():
+    params = StrategyParams(symbols=["AAPL"])
+    assert params.name == ""
+
+
+def test_strategy_params_name_can_be_set():
+    params = StrategyParams(symbols=["AAPL"], name="my_strategy")
+    assert params.name == "my_strategy"
