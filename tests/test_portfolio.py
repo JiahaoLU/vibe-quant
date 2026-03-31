@@ -19,7 +19,7 @@ def _strategy_bundle(symbol: str, signal: float, ts=None, strategy_id: str = "te
     return StrategyBundleEvent(
         timestamp=ts,
         combined={symbol: sig},
-        per_strategy={strategy_id: {symbol: 1.0}} if signal > 0 else {},
+        per_strategy={strategy_id: {symbol: 1.0}},
     )
 
 
@@ -291,3 +291,122 @@ def test_fill_pending_orders_emits_hold_when_no_real_orders():
     assert len(collected) == 1
     assert collected[0].direction == "HOLD"
     assert collected[0].quantity == 0
+
+
+def test_single_strategy_realized_pnl_equals_total_cash_impact():
+    """With one strategy, realized_pnl tracks all fills at 100% attribution."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    # BUY 10 @ 100, commission 1.0 → cash impact = 10*100 + 1 = 1001 (cost)
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0, strategy_id="s1"))
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    portfolio.on_fill(_fill("AAPL", "BUY", 100, 100.0))   # 100 shares @ 100, comm 1.0
+
+    pnl = portfolio.equity_curve[-1]["strategy_pnl"]
+    assert "s1" in pnl
+    assert abs(pnl["s1"] - (-100 * 100.0 - 1.0)) < 1e-6   # -(cost + commission)
+
+
+def test_single_strategy_buy_then_sell_profit():
+    """Buy at 100, sell at 120 → realized PnL = 120*qty - 100*qty - 2*commission."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0, strategy_id="s1"))
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    portfolio.on_fill(_fill("AAPL", "BUY", 10, 100.0))    # cost: 10*100 + 1 = 1001
+
+    portfolio.on_signal(_strategy_bundle("AAPL", 0.0, strategy_id="s1"))
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 120.0))
+    portfolio.on_fill(_fill("AAPL", "SELL", 10, 120.0))   # revenue: 10*120 - 1 = 1199
+
+    pnl = portfolio.equity_curve[-1]["strategy_pnl"]["s1"]
+    assert abs(pnl - (10 * 120.0 - 1.0 - 10 * 100.0 - 1.0)) < 1e-6   # 198.0
+
+
+def test_two_strategies_equal_nominal_split_commission():
+    """Two equal-nominal strategies each absorb 50% of the commission."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    ts = datetime(2020, 1, 2)
+    bundle = StrategyBundleEvent(
+        timestamp=ts,
+        combined={"AAPL": SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)},
+        per_strategy={"a": {"AAPL": 0.5}, "b": {"AAPL": 0.5}},
+    )
+    portfolio.on_signal(bundle)
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    portfolio.on_fill(_fill("AAPL", "BUY", 10, 100.0))   # commission = 1.0
+
+    pnl = portfolio.equity_curve[-1]["strategy_pnl"]
+    # Each strategy absorbs 50% of cost: -(10*100 + 1) * 0.5 = -500.5
+    assert abs(pnl["a"] - (-500.5)) < 1e-6
+    assert abs(pnl["b"] - (-500.5)) < 1e-6
+
+
+def test_full_exit_fill_pnl_not_zero():
+    """After a full exit (combined==0), the SELL fill's PnL is still attributed (not silently dropped)."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    # Buy via a bundle where combined > 0
+    ts = datetime(2020, 1, 2)
+    buy_bundle = StrategyBundleEvent(
+        timestamp=ts,
+        combined={"AAPL": SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)},
+        per_strategy={"s1": {"AAPL": 1.0}},
+    )
+    portfolio.on_signal(buy_bundle)
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    portfolio.on_fill(_fill("AAPL", "BUY", 10, 100.0))
+
+    pnl_after_buy = portfolio.equity_curve[-1]["strategy_pnl"]["s1"]
+
+    # Sell via a bundle where combined == 0 — per_strategy has s1 with full exit attribution
+    sell_bundle = StrategyBundleEvent(
+        timestamp=datetime(2020, 1, 3),
+        combined={"AAPL": SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 3), signal=0.0)},
+        per_strategy={"s1": {"AAPL": 1.0}},   # full-exit attribution from container
+    )
+    portfolio.on_signal(sell_bundle)
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 120.0))
+    portfolio.on_fill(_fill("AAPL", "SELL", 10, 120.0))
+
+    pnl_after_sell = portfolio.equity_curve[-1]["strategy_pnl"]["s1"]
+    assert pnl_after_sell > pnl_after_buy   # sell proceeds increased PnL
+
+
+def test_hold_fill_does_not_change_strategy_pnl():
+    """HOLD fills do not affect strategy_pnl."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0, strategy_id="s1"))
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    portfolio.on_fill(_fill("AAPL", "BUY", 10, 100.0))
+    pnl_before = dict(portfolio.equity_curve[-1]["strategy_pnl"])
+
+    from trading.events import FillEvent
+    portfolio.on_fill(FillEvent(
+        symbol="", timestamp=datetime(2020, 1, 3),
+        direction="HOLD", quantity=0, fill_price=0.0, commission=0.0,
+    ))
+    pnl_after = portfolio.equity_curve[-1]["strategy_pnl"]
+    assert pnl_after == pnl_before
+
+
+def test_strategy_pnl_property_matches_equity_curve():
+    """strategy_pnl property returns rows with timestamp + strategy columns."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0, strategy_id="s1"))
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    portfolio.on_fill(_fill("AAPL", "BUY", 10, 100.0))
+
+    rows = portfolio.strategy_pnl
+    assert len(rows) == 1
+    assert "timestamp" in rows[0]
+    assert "s1" in rows[0]

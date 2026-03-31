@@ -31,6 +31,7 @@ class SimplePortfolio(Portfolio):
         self._equity_curve: list[dict] = []
         self._pending_signals: StrategyBundleEvent | None = None
         self._current_attribution: dict[str, dict[str, float]] = {}
+        self._strategy_realized_pnl: dict[str, float] = {}
 
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
         pending = self._pending_signals
@@ -94,6 +95,15 @@ class SimplePortfolio(Portfolio):
             self._holdings[event.symbol] = self._holdings.get(event.symbol, 0) + multiplier * event.quantity
             self._cash -= multiplier * event.fill_price * event.quantity + event.commission
 
+            # Apportion fill's cash impact across strategies
+            fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
+            for strategy_id, symbol_weights in self._current_attribution.items():
+                share = symbol_weights.get(event.symbol, 0.0)
+                if share:
+                    self._strategy_realized_pnl[strategy_id] = (
+                        self._strategy_realized_pnl.get(strategy_id, 0.0) - share * fill_cash_impact
+                    )
+
         market_value = 0.0
         for symbol in self._symbols:
             bars = self._get_bars(symbol, 1)
@@ -106,8 +116,16 @@ class SimplePortfolio(Portfolio):
             "holdings":     dict(self._holdings),
             "market_value": market_value,
             "equity":       self._cash + market_value,
+            "strategy_pnl": dict(self._strategy_realized_pnl),
         })
 
     @property
     def equity_curve(self) -> list[dict]:
         return self._equity_curve
+
+    @property
+    def strategy_pnl(self) -> list[dict]:
+        return [
+            {"timestamp": row["timestamp"], **row["strategy_pnl"]}
+            for row in self._equity_curve
+        ]
