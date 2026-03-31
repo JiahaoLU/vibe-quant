@@ -116,11 +116,11 @@ class StrategyContainer(StrategySignalGenerator):
                         per_strategy.setdefault(self._ids[i], {})[symbol] = frac
             else:
                 # Full exit: split equally among strategies that were long last bar
-                prev_long = [i for i in range(len(self._strategies))
-                             if prev_carried[i].get(symbol, 0.0) != 0.0]
-                if prev_long:
-                    share = 1.0 / len(prev_long)
-                    for i in prev_long:
+                prev_nonzero = [i for i in range(len(self._strategies))
+                                if prev_carried[i].get(symbol, 0.0) != 0.0]
+                if prev_nonzero:
+                    share = 1.0 / len(prev_nonzero)
+                    for i in prev_nonzero:
                         per_strategy.setdefault(self._ids[i], {})[symbol] = share
 
         self.emit(StrategyBundleEvent(

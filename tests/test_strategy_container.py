@@ -154,6 +154,8 @@ def test_two_strategies_same_symbol_weighted_by_nominal():
     """Two strategies targeting the same symbol emit one combined bundle with weighted signal."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    # Strategy A: nominal 3, signal 1.0 → contribution 3/5 * 1.0 = 0.6
+    # Strategy B: nominal 2, signal 1.0 → contribution 2/5 * 1.0 = 0.4
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=3.0))
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=2.0))
     container.get_signals(_bundle(["AAPL"]))
@@ -183,6 +185,7 @@ def test_nominal_weights_combined_signal():
     """Strategy with double the nominal contributes proportionally more to the combined signal."""
 
     class _HalfSignal(Strategy):
+        """Returns signal=0.5 for its symbol."""
         def _init(self, p): pass
         def calculate_signals(self, event):
             ts = event.timestamp
@@ -192,6 +195,7 @@ def test_nominal_weights_combined_signal():
             )
 
     class _FullSignal(Strategy):
+        """Returns signal=1.0 for its symbol."""
         def _init(self, p): pass
         def calculate_signals(self, event):
             ts = event.timestamp
@@ -202,6 +206,7 @@ def test_nominal_weights_combined_signal():
 
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    # nominal 1 with signal 0.5, nominal 1 with signal 1.0 → weighted avg = 0.75
     container.add(_HalfSignal, StrategyParams(symbols=["AAPL"], nominal=1.0))
     container.add(_FullSignal, StrategyParams(symbols=["AAPL"], nominal=1.0))
     container.get_signals(_bundle(["AAPL"]))
