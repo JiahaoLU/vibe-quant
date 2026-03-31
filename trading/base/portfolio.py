@@ -1,12 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from ..events import Event, FillEvent, SignalBundleEvent
+from ..events import BarBundleEvent, Event, FillEvent, SignalBundleEvent
 
 
 class Portfolio(ABC):
     def __init__(self, emit: Callable[[Event], None]):
         self._emit = emit
+
+    @abstractmethod
+    def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None: ...
 
     @abstractmethod
     def on_signal(self, event: SignalBundleEvent) -> None: ...
