@@ -60,6 +60,8 @@ class StrategyContainer(StrategySignalGenerator):
         """Factory: construct a strategy and register it with its nominal."""
         index = len(self._strategies)
         strategy_id = strategy_params.name if strategy_params.name else f"{strategy_class.__name__}_{index}"
+        if strategy_id in self._ids:
+            raise ValueError(f"Strategy id {strategy_id!r} is already registered")
         instance = strategy_class(
             get_bars=get_bars if get_bars is not None else self._get_bars,
             strategy_params=strategy_params,
@@ -69,7 +71,11 @@ class StrategyContainer(StrategySignalGenerator):
         self._ids.append(strategy_id)
 
     def add_strategy(self, strategy: Strategy, nominal: float = 1.0) -> None:
-        """Add a pre-constructed strategy instance with an explicit nominal."""
+        """Add a pre-constructed strategy instance with an explicit nominal.
+
+        Note: the strategy ID is always auto-generated as ClassName_index.
+        To use a custom name, register via add() with StrategyParams.name instead.
+        """
         index = len(self._strategies)
         strategy_id = f"{strategy.__class__.__name__}_{index}"
         self._strategies.append((strategy, nominal))

@@ -324,3 +324,12 @@ def test_full_exit_sell_attribution_distributed_to_previously_long():
     ps = collected[0].per_strategy
     assert "exiter" in ps
     assert abs(ps["exiter"]["AAPL"] - 1.0) < 1e-9
+
+
+def test_add_raises_on_duplicate_strategy_id():
+    """Registering two strategies with the same name raises ValueError."""
+    import pytest
+    container = StrategyContainer(emit=lambda e: None, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="alpha"))
+    with pytest.raises(ValueError, match="alpha"):
+        container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="alpha"))

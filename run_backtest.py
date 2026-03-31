@@ -83,7 +83,7 @@ else:
         pnl_path = RESULTS_PATH.replace("equity_curve.csv", "strategy_pnl.csv")
         with open(pnl_path, "w", newline="") as f:
             fieldnames = ["timestamp"] + strategy_ids
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore", restval="0.0")
             writer.writeheader()
             for row in strategy_pnl_rows:
                 writer.writerow(row)
