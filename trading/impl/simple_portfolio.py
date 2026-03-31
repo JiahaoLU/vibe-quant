@@ -1,7 +1,7 @@
 from typing import Callable
 
 from ..base.portfolio import Portfolio
-from ..events import Event, FillEvent, OrderEvent, SignalBundleEvent, TickEvent
+from ..events import BarBundleEvent, Event, FillEvent, OrderEvent, SignalBundleEvent, TickEvent
 
 
 class SimplePortfolio(Portfolio):
@@ -29,17 +29,23 @@ class SimplePortfolio(Portfolio):
         self._initial_capital = initial_capital
         self._holdings: dict[str, int] = {s: 0 for s in symbols}
         self._equity_curve: list[dict] = []
+        self._pending_signals: SignalBundleEvent | None = None
 
-    def on_signal(self, event: SignalBundleEvent) -> None:
+    def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
+        if self._pending_signals is None:
+            return
+
+        pending = self._pending_signals
+        self._pending_signals = None          # clear before emitting (prevent re-entrancy)
+
         available_cash = self._cash
-        for symbol, signal_event in event.signals.items():
+        for symbol, signal_event in pending.signals.items():
             # No shorts: clamp negative signals to zero
             weight = max(0.0, signal_event.signal)
-
-            bars = self._get_bars(symbol, 1)
-            if not bars:
+            bar = bar_bundle.bars.get(symbol)
+            if bar is None:
                 continue
-            price = bars[-1].close
+            price = bar.open
             if price <= 0:
                 continue
 
@@ -53,7 +59,7 @@ class SimplePortfolio(Portfolio):
                     available_cash -= cost
                     self._emit(OrderEvent(
                         symbol          = symbol,
-                        timestamp       = event.timestamp,
+                        timestamp       = bar_bundle.timestamp,
                         order_type      = "MARKET",
                         direction       = "BUY",
                         quantity        = delta,
@@ -62,12 +68,15 @@ class SimplePortfolio(Portfolio):
             elif delta < 0:
                 self._emit(OrderEvent(
                     symbol          = symbol,
-                    timestamp       = event.timestamp,
+                    timestamp       = bar_bundle.timestamp,
                     order_type      = "MARKET",
                     direction       = "SELL",
                     quantity        = abs(delta),
                     reference_price = price,
                 ))
+
+    def on_signal(self, event: SignalBundleEvent) -> None:
+        self._pending_signals = event
 
     def on_fill(self, event: FillEvent) -> None:
         multiplier = 1 if event.direction == "BUY" else -1
