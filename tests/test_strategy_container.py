@@ -2,7 +2,7 @@ from datetime import datetime
 from trading.base.strategy import Strategy, StrategyBase
 from trading.base.strategy_params import StrategyParams
 from trading.impl.strategy_container import StrategyContainer
-from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
+from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, StrategyBundleEvent, TickEvent
 
 
 def _bundle(symbols: list[str], close: float = 100.0) -> BarBundleEvent:
@@ -83,13 +83,13 @@ def test_on_get_signal_called_with_bundle_when_signals_fire():
 
 
 def test_add_factory_emits_one_combined_bundle():
-    """Container aggregates strategy results and emits exactly one SignalBundleEvent."""
+    """Container aggregates strategy results and emits exactly one StrategyBundleEvent."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
     container.get_signals(_bundle(["AAPL"]))
     assert len(collected) == 1
-    assert isinstance(collected[0], SignalBundleEvent)
+    assert isinstance(collected[0], StrategyBundleEvent)
 
 
 def test_add_factory_respects_overridden_get_bars():
@@ -117,7 +117,7 @@ def test_add_strategy_accepts_prebuilt_instance():
     container.add_strategy(strategy)
     container.get_signals(_bundle(["AAPL"]))
     assert len(container_emit) == 1
-    assert isinstance(container_emit[0], SignalBundleEvent)
+    assert isinstance(container_emit[0], StrategyBundleEvent)
 
 
 def test_get_signals_combines_independent_symbol_strategies():
@@ -129,8 +129,8 @@ def test_get_signals_combines_independent_symbol_strategies():
     container.get_signals(_bundle(["AAPL", "MSFT"]))
     assert len(collected) == 1
     bundle = collected[0]
-    assert "AAPL" in bundle.signals
-    assert "MSFT" in bundle.signals
+    assert "AAPL" in bundle.combined
+    assert "MSFT" in bundle.combined
 
 
 def test_strategy_returning_none_emits_nothing():
@@ -154,14 +154,12 @@ def test_two_strategies_same_symbol_weighted_by_nominal():
     """Two strategies targeting the same symbol emit one combined bundle with weighted signal."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    # Strategy A: nominal 3, signal 1.0 → contribution 3/5 * 1.0 = 0.6
-    # Strategy B: nominal 2, signal 1.0 → contribution 2/5 * 1.0 = 0.4
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=3.0))
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=2.0))
     container.get_signals(_bundle(["AAPL"]))
     assert len(collected) == 1
-    combined_signal = collected[0].signals["AAPL"].signal
-    assert abs(combined_signal - 1.0) < 1e-9   # both long → weighted avg = 1.0
+    combined_signal = collected[0].combined["AAPL"].signal
+    assert abs(combined_signal - 1.0) < 1e-9
 
 
 def test_carry_forward_applies_when_one_strategy_silent():
@@ -185,7 +183,6 @@ def test_nominal_weights_combined_signal():
     """Strategy with double the nominal contributes proportionally more to the combined signal."""
 
     class _HalfSignal(Strategy):
-        """Returns signal=0.5 for its symbol."""
         def _init(self, p): pass
         def calculate_signals(self, event):
             ts = event.timestamp
@@ -195,7 +192,6 @@ def test_nominal_weights_combined_signal():
             )
 
     class _FullSignal(Strategy):
-        """Returns signal=1.0 for its symbol."""
         def _init(self, p): pass
         def calculate_signals(self, event):
             ts = event.timestamp
@@ -206,13 +202,12 @@ def test_nominal_weights_combined_signal():
 
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    # nominal 1 with signal 0.5, nominal 1 with signal 1.0 → weighted avg = 0.75
     container.add(_HalfSignal, StrategyParams(symbols=["AAPL"], nominal=1.0))
     container.add(_FullSignal, StrategyParams(symbols=["AAPL"], nominal=1.0))
     container.get_signals(_bundle(["AAPL"]))
 
     assert len(collected) == 1
-    assert abs(collected[0].signals["AAPL"].signal - 0.75) < 1e-9
+    assert abs(collected[0].combined["AAPL"].signal - 0.75) < 1e-9
 
 
 def test_strategy_params_name_defaults_to_empty():
@@ -223,3 +218,104 @@ def test_strategy_params_name_defaults_to_empty():
 def test_strategy_params_name_can_be_set():
     params = StrategyParams(symbols=["AAPL"], name="my_strategy")
     assert params.name == "my_strategy"
+
+
+# --- New tests for StrategyBundleEvent and per_strategy attribution ---
+
+def test_container_emits_strategy_bundle_event():
+    """Container emits StrategyBundleEvent (not SignalBundleEvent) after this change."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
+    container.get_signals(_bundle(["AAPL"]))
+    assert len(collected) == 1
+    assert isinstance(collected[0], StrategyBundleEvent)
+
+
+def test_strategy_bundle_combined_matches_signal():
+    """combined field on StrategyBundleEvent carries the aggregated signal."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
+    container.get_signals(_bundle(["AAPL"]))
+    assert "AAPL" in collected[0].combined
+    assert abs(collected[0].combined["AAPL"].signal - 1.0) < 1e-9
+
+
+def test_per_strategy_single_strategy_is_100_percent():
+    """Single strategy always gets 100% attribution for each symbol."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="alpha"))
+    container.get_signals(_bundle(["AAPL"]))
+    bundle = collected[0]
+    assert abs(bundle.per_strategy["alpha"]["AAPL"] - 1.0) < 1e-9
+
+
+def test_per_strategy_two_equal_nominal_strategies():
+    """Two strategies with equal nominals each get 50% attribution."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=1.0, name="a"))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=1.0, name="b"))
+    container.get_signals(_bundle(["AAPL"]))
+    ps = collected[0].per_strategy
+    assert abs(ps["a"]["AAPL"] - 0.5) < 1e-9
+    assert abs(ps["b"]["AAPL"] - 0.5) < 1e-9
+
+
+def test_per_strategy_fractions_sum_to_one():
+    """Attribution fractions across all strategies sum to 1.0 for each symbol."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=3.0, name="a"))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=2.0, name="b"))
+    container.get_signals(_bundle(["AAPL"]))
+    ps = collected[0].per_strategy
+    total = sum(ps[sid]["AAPL"] for sid in ps if "AAPL" in ps[sid])
+    assert abs(total - 1.0) < 1e-9
+
+
+def test_strategy_id_uses_name_when_provided():
+    """Strategy ID in per_strategy uses StrategyParams.name when non-empty."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="my_strat"))
+    container.get_signals(_bundle(["AAPL"]))
+    assert "my_strat" in collected[0].per_strategy
+
+
+def test_strategy_id_fallback_uses_classname_and_index():
+    """When name is empty, strategy ID is ClassName_index."""
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
+    container.get_signals(_bundle(["AAPL"]))
+    assert "_AlwaysLong_0" in collected[0].per_strategy
+
+
+def test_full_exit_sell_attribution_distributed_to_previously_long():
+    """When combined == 0 (full exit), attribution is split equally among strategies that were long."""
+
+    class _ExitsOnSecondBar(Strategy):
+        """Returns signal 1.0 on bar 1, then 0.0 on bar 2."""
+        def _init(self, p): self._bar = 0
+        def calculate_signals(self, event):
+            self._bar += 1
+            sig = 1.0 if self._bar == 1 else 0.0
+            ts = event.timestamp
+            return SignalBundleEvent(
+                timestamp=ts,
+                signals={"AAPL": SignalEvent(symbol="AAPL", timestamp=ts, signal=sig)},
+            )
+
+    collected = []
+    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
+    container.add(_ExitsOnSecondBar, StrategyParams(symbols=["AAPL"], name="exiter"))
+    container.get_signals(_bundle(["AAPL"]))   # bar 1: signal 1.0
+    collected.clear()
+    container.get_signals(_bundle(["AAPL"]))   # bar 2: signal 0.0 → full exit
+    assert len(collected) == 1
+    ps = collected[0].per_strategy
+    assert "exiter" in ps
+    assert abs(ps["exiter"]["AAPL"] - 1.0) < 1e-9
