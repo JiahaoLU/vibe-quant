@@ -29,8 +29,9 @@ class TickEvent:                 # value type — not an Event subclass, not que
 
 @dataclass
 class BarBundleEvent(Event):
-    timestamp: datetime
-    bars:      dict[str, TickEvent]   # symbol → tick
+    timestamp:     datetime
+    bars:          dict[str, TickEvent]   # symbol → tick
+    is_end_of_day: bool = True
     type: EventType = field(default=EventType.BAR_BUNDLE, init=False)
 
 
@@ -55,7 +56,7 @@ class OrderEvent(Event):
     order_type:      Literal["MARKET", "LIMIT"]
     direction:       Literal["BUY", "SELL"]
     quantity:        int
-    reference_price: float = 0.0  # current bar close; execution handler applies slippage
+    reference_price: float = 0.0  # fill reference price (next bar's open for EOD signals); execution handler applies slippage
     type: EventType = field(default=EventType.ORDER, init=False)
 
 
