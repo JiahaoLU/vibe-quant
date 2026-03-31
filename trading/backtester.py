@@ -29,7 +29,8 @@ class Backtester:
                 event = self._events.get(block=False)
                 match event.type:
                     case EventType.BAR_BUNDLE:
-                        self._strategy.get_signals(event)
+                        self._portfolio.fill_pending_orders(event)   # fill T-1 pending at bar T open
+                        self._strategy.get_signals(event)            # generate signals from bar T close
                     case EventType.SIGNAL_BUNDLE:
                         self._portfolio.on_signal(event)
                     case EventType.ORDER:
