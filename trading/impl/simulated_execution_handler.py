@@ -6,8 +6,7 @@ from ..events import Event, FillEvent, OrderEvent
 
 class SimulatedExecutionHandler(ExecutionHandler):
     """
-    Fills at reference_price (current bar close) with slippage and flat commission.
-    BUYs fill slightly higher, SELLs slightly lower.
+    Fills BUY/SELL at reference_price with slippage and flat commission; HOLD passes through as a zero-cost fill.
     """
 
     def __init__(
@@ -21,6 +20,17 @@ class SimulatedExecutionHandler(ExecutionHandler):
         self._slippage_pct = slippage_pct
 
     def execute_order(self, event: OrderEvent) -> None:
+        if event.direction == "HOLD":
+            self._emit(FillEvent(
+                symbol     = event.symbol,
+                timestamp  = event.timestamp,
+                direction  = "HOLD",
+                quantity   = 0,
+                fill_price = 0.0,
+                commission = 0.0,
+            ))
+            return
+
         direction_factor = 1 if event.direction == "BUY" else -1
         fill_price = event.reference_price * (1 + direction_factor * self._slippage_pct)
 
