@@ -55,6 +55,13 @@ else:
     print(f"Total return    : {total_return:>+.2f}%")
     print(f"Trades (fills)  : {len(curve)}")
 
+    # Per-strategy realized PnL summary
+    final_pnl = curve[-1]["strategy_pnl"]
+    if final_pnl:
+        print("\nStrategy realized PnL:")
+        for strategy_id, pnl in sorted(final_pnl.items()):
+            print(f"  {strategy_id:<30} ${pnl:>+10,.2f}")
+
     with open(RESULTS_PATH, "w", newline="") as f:
         fieldnames = ["timestamp", "cash", "holdings", "market_value", "equity"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -68,3 +75,16 @@ else:
                 "equity":       row["equity"],
             })
     print(f"Equity curve    : {RESULTS_PATH}")
+
+    # Export per-strategy PnL CSV
+    strategy_pnl_rows = portfolio.strategy_pnl
+    if strategy_pnl_rows:
+        strategy_ids = [k for k in strategy_pnl_rows[-1] if k != "timestamp"]
+        pnl_path = RESULTS_PATH.replace("equity_curve.csv", "strategy_pnl.csv")
+        with open(pnl_path, "w", newline="") as f:
+            fieldnames = ["timestamp"] + strategy_ids
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for row in strategy_pnl_rows:
+                writer.writerow(row)
+        print(f"Strategy PnL    : {pnl_path}")
