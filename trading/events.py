@@ -53,7 +53,7 @@ class SignalBundleEvent:         # value type — not queued; used internally by
 class StrategyBundleEvent(Event):
     timestamp:    datetime
     combined:     dict[str, SignalEvent]        # aggregated signal per symbol (used by portfolio fill logic)
-    per_strategy: dict[str, dict[str, float]]  # strategy_id → symbol → fractional weight (sums to 1.0 per symbol)
+    per_strategy: dict[str, dict[str, float]]  # strategy_id → symbol → fractional weight; intended to sum to 1.0 per symbol
     type: EventType = field(default=EventType.STRATEGY_BUNDLE, init=False)
 
 
@@ -64,7 +64,7 @@ class OrderEvent(Event):
     order_type:      Literal["MARKET", "LIMIT"]
     direction:       Literal["BUY", "SELL", "HOLD"]
     quantity:        int
-    reference_price: float = 0.0
+    reference_price: float = 0.0  # fill reference price (next bar's open for EOD signals); execution handler applies slippage
     type: EventType = field(default=EventType.ORDER, init=False)
 
 
