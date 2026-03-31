@@ -32,56 +32,68 @@ class SimplePortfolio(Portfolio):
         self._pending_signals: SignalBundleEvent | None = None
 
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
-        if self._pending_signals is None:
-            return
-
         pending = self._pending_signals
-        self._pending_signals = None          # clear before emitting (prevent re-entrancy)
+        self._pending_signals = None
 
-        available_cash = self._cash
-        for symbol, signal_event in pending.signals.items():
-            # No shorts: clamp negative signals to zero
-            weight = max(0.0, signal_event.signal)
-            bar = bar_bundle.bars.get(symbol)
-            if bar is None:
-                continue
-            price = bar.open
-            if price <= 0:
-                continue
+        emitted_any = False
+        if pending is not None:
+            available_cash = self._cash
+            for symbol, signal_event in pending.signals.items():
+                # No shorts: clamp negative signals to zero
+                weight = max(0.0, signal_event.signal)
+                bar = bar_bundle.bars.get(symbol)
+                if bar is None:
+                    continue
+                price = bar.open
+                if price <= 0:
+                    continue
 
-            target_qty  = int(weight * self._initial_capital / price)
-            current_qty = self._holdings.get(symbol, 0)
-            delta       = target_qty - current_qty
+                target_qty  = int(weight * self._initial_capital / price)
+                current_qty = self._holdings.get(symbol, 0)
+                delta       = target_qty - current_qty
 
-            if delta > 0:
-                cost = delta * price
-                if available_cash >= cost:
-                    available_cash -= cost
+                if delta > 0:
+                    cost = delta * price
+                    if available_cash >= cost:
+                        available_cash -= cost
+                        self._emit(OrderEvent(
+                            symbol          = symbol,
+                            timestamp       = bar_bundle.timestamp,
+                            order_type      = "MARKET",
+                            direction       = "BUY",
+                            quantity        = delta,
+                            reference_price = price,
+                        ))
+                        emitted_any = True
+                elif delta < 0:
                     self._emit(OrderEvent(
                         symbol          = symbol,
                         timestamp       = bar_bundle.timestamp,
                         order_type      = "MARKET",
-                        direction       = "BUY",
-                        quantity        = delta,
+                        direction       = "SELL",
+                        quantity        = abs(delta),
                         reference_price = price,
                     ))
-            elif delta < 0:
-                self._emit(OrderEvent(
-                    symbol          = symbol,
-                    timestamp       = bar_bundle.timestamp,
-                    order_type      = "MARKET",
-                    direction       = "SELL",
-                    quantity        = abs(delta),
-                    reference_price = price,
-                ))
+                    emitted_any = True
+
+        if not emitted_any:
+            self._emit(OrderEvent(
+                symbol          = "",
+                timestamp       = bar_bundle.timestamp,
+                order_type      = "MARKET",
+                direction       = "HOLD",
+                quantity        = 0,
+                reference_price = 0.0,
+            ))
 
     def on_signal(self, event: SignalBundleEvent) -> None:
         self._pending_signals = event
 
     def on_fill(self, event: FillEvent) -> None:
-        multiplier = 1 if event.direction == "BUY" else -1
-        self._holdings[event.symbol] = self._holdings.get(event.symbol, 0) + multiplier * event.quantity
-        self._cash -= multiplier * event.fill_price * event.quantity + event.commission
+        if event.direction != "HOLD":
+            multiplier = 1 if event.direction == "BUY" else -1
+            self._holdings[event.symbol] = self._holdings.get(event.symbol, 0) + multiplier * event.quantity
+            self._cash -= multiplier * event.fill_price * event.quantity + event.commission
 
         market_value = 0.0
         for symbol in self._symbols:
