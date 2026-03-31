@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from trading.impl.simple_portfolio import SimplePortfolio
-from trading.events import FillEvent, OrderEvent, SignalBundleEvent, SignalEvent, TickEvent
+from trading.events import BarBundleEvent, FillEvent, OrderEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 
 def _get_bars(prices: dict[str, float]):
@@ -26,7 +26,6 @@ def _fill(symbol: str, direction: str, quantity: int, price: float) -> FillEvent
 
 
 def _fill_bar(symbol: str, open_price: float, ts=None):
-    from trading.events import BarBundleEvent
     ts = ts or datetime(2020, 1, 3)
     tick = TickEvent(symbol=symbol, timestamp=ts,
                      open=open_price, high=open_price, low=open_price, close=open_price, volume=1000.0)
@@ -165,7 +164,6 @@ def test_long_signal_no_order_when_no_cash():
 
 def test_multi_symbol_normalised_signals_do_not_overdraw_cash():
     """Equal-weight signals (0.5 each) for 2 symbols should fit within initial_capital."""
-    from trading.events import BarBundleEvent
     collected = []
     prices = {"AAPL": 100.0, "MSFT": 100.0}
     portfolio = SimplePortfolio(collected.append, _get_bars(prices), ["AAPL", "MSFT"], initial_capital=10_000.0)
@@ -196,7 +194,6 @@ def test_multi_symbol_normalised_signals_do_not_overdraw_cash():
 
 def test_fill_pending_orders_uses_open_price():
     """fill_pending_orders uses the fill bar's open price, not the signal bar's close."""
-    from trading.events import BarBundleEvent
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
