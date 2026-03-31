@@ -94,7 +94,9 @@ def test_exit_signal_no_order_when_no_holdings():
     portfolio.on_signal(_signal_bundle("AAPL", 0.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
-    assert collected == []
+    assert len(collected) == 1
+    assert collected[0].direction == "HOLD"
+    assert collected[0].quantity == 0
 
 
 def test_short_signal_treated_as_exit():
@@ -113,14 +115,16 @@ def test_short_signal_treated_as_exit():
 
 
 def test_short_signal_no_order_when_flat():
-    """Negative signal with no holdings → still no order (clamped to 0 = exit with nothing to sell)."""
+    """Negative signal with no holdings → still no real order (clamped to 0); HOLD emitted for equity tracking."""
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
     portfolio.on_signal(_signal_bundle("AAPL", -1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
-    assert collected == []
+    assert len(collected) == 1
+    assert collected[0].direction == "HOLD"
+    assert collected[0].quantity == 0
 
 
 def test_on_fill_updates_holdings():
@@ -158,8 +162,10 @@ def test_long_signal_no_order_when_no_cash():
     portfolio.on_signal(_signal_bundle("AAPL", 1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
-    # target = int(1.0 * 50 / 100) = 0 → delta = 0 → no order
-    assert collected == []
+    # target = int(1.0 * 50 / 100) = 0 → delta = 0 → no real order → HOLD
+    assert len(collected) == 1
+    assert collected[0].direction == "HOLD"
+    assert collected[0].quantity == 0
 
 
 def test_multi_symbol_normalised_signals_do_not_overdraw_cash():
@@ -212,27 +218,31 @@ def test_fill_pending_orders_uses_open_price():
 
 
 def test_fill_pending_orders_no_op_before_any_signal():
-    """fill_pending_orders before any on_signal emits nothing."""
+    """fill_pending_orders with no pending emits a HOLD order for equity tracking."""
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
-    assert collected == []
+    assert len(collected) == 1
+    assert collected[0].direction == "HOLD"
+    assert collected[0].quantity == 0
 
 
 def test_pending_signals_cleared_after_fill():
-    """A second fill_pending_orders call after the first emits nothing."""
+    """A second fill_pending_orders call after the first emits a HOLD (pending was cleared)."""
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
     portfolio.on_signal(_signal_bundle("AAPL", 1.0))
-    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))  # emits order
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))  # emits BUY
     collected.clear()
 
-    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))  # pending was cleared
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))  # pending cleared → HOLD
 
-    assert collected == []
+    assert len(collected) == 1
+    assert collected[0].direction == "HOLD"
+    assert collected[0].quantity == 0
 
 
 def test_on_signal_does_not_emit_orders_directly():
@@ -243,3 +253,32 @@ def test_on_signal_does_not_emit_orders_directly():
     portfolio.on_signal(_signal_bundle("AAPL", 1.0))
 
     assert collected == []
+
+
+def test_hold_order_records_equity_without_changing_holdings():
+    """HOLD fill records an equity snapshot but leaves cash and holdings unchanged."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.on_fill(FillEvent(
+        symbol="", timestamp=datetime(2020, 1, 2),
+        direction="HOLD", quantity=0, fill_price=0.0, commission=0.0,
+    ))
+
+    assert len(portfolio.equity_curve) == 1
+    snap = portfolio.equity_curve[-1]
+    assert snap["cash"] == 10_000.0           # unchanged
+    assert snap["holdings"] == {"AAPL": 0}    # "" sentinel not present
+    assert snap["equity"] == 10_000.0
+
+
+def test_fill_pending_orders_emits_hold_when_no_real_orders():
+    """fill_pending_orders with no pending emits exactly one HOLD order."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+
+    assert len(collected) == 1
+    assert collected[0].direction == "HOLD"
+    assert collected[0].quantity == 0
