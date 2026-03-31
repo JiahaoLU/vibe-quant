@@ -54,7 +54,7 @@ class OrderEvent(Event):
     symbol:          str
     timestamp:       datetime
     order_type:      Literal["MARKET", "LIMIT"]
-    direction:       Literal["BUY", "SELL"]
+    direction:       Literal["BUY", "SELL", "HOLD"]
     quantity:        int
     reference_price: float = 0.0  # fill reference price (next bar's open for EOD signals); execution handler applies slippage
     type: EventType = field(default=EventType.ORDER, init=False)
@@ -64,7 +64,7 @@ class OrderEvent(Event):
 class FillEvent(Event):
     symbol:     str
     timestamp:  datetime
-    direction:  Literal["BUY", "SELL"]
+    direction:  Literal["BUY", "SELL", "HOLD"]
     quantity:   int
     fill_price: float
     commission: float
