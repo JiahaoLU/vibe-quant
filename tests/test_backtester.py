@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from trading.backtester import Backtester
 from trading.events import (
-    BarBundleEvent, FillEvent, OrderEvent, SignalBundleEvent, SignalEvent, TickEvent,
+    BarBundleEvent, FillEvent, OrderEvent, StrategyBundleEvent, SignalEvent, TickEvent,
 )
 
 
@@ -37,14 +37,19 @@ def test_bar_bundle_routes_to_strategy():
     strategy.get_signals.assert_called_once_with(bundle)
 
 
-def test_signal_bundle_routes_to_portfolio():
+def test_strategy_bundle_routes_to_portfolio():
     events = queue.Queue()
     strategy = MagicMock()
     portfolio = MagicMock()
     execution = MagicMock()
 
-    sig = SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 2), signal=1.0)
-    bundle = SignalBundleEvent(timestamp=datetime(2020, 1, 2), signals={"AAPL": sig})
+    ts = datetime(2020, 1, 2)
+    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)
+    bundle = StrategyBundleEvent(
+        timestamp=ts,
+        combined={"AAPL": sig},
+        per_strategy={"strat_0": {"AAPL": 1.0}},
+    )
     events.put(bundle)
 
     bt = Backtester(events, _stopped_data(), strategy, portfolio, execution)
