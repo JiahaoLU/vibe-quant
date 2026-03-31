@@ -18,13 +18,14 @@ class Event:
 
 @dataclass
 class TickEvent:                 # value type — not an Event subclass, not queued directly
-    symbol:    str
-    timestamp: datetime
-    open:      float
-    high:      float
-    low:       float
-    close:     float
-    volume:    float
+    symbol:       str
+    timestamp:    datetime
+    open:         float
+    high:         float
+    low:          float
+    close:        float
+    volume:       float
+    is_synthetic: bool = False   # True when bar is carry-forwarded (no real data at this timestamp)
 
 
 @dataclass

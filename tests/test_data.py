@@ -68,7 +68,8 @@ def test_timestamps_are_union_sorted():
         os.unlink(msft)
 
 
-def test_missing_symbol_bar_is_zero_filled():
+def test_missing_symbol_bar_is_carry_forwarded():
+    """Missing bar uses last known real price, not zero."""
     aapl = make_csv(AAPL_ROWS)
     msft = make_csv(MSFT_ROWS)
     try:
@@ -79,8 +80,46 @@ def test_missing_symbol_bar_is_zero_filled():
         handler.update_bars()  # 2020-01-03 — MSFT missing
         bundle = events.get_nowait()
         assert bundle.bars["AAPL"].close == 101.0
-        assert bundle.bars["MSFT"].close == 0.0
-        assert bundle.bars["MSFT"].open == 0.0
+        assert bundle.bars["AAPL"].is_synthetic is False
+        assert bundle.bars["MSFT"].close == 200.5   # carry-forward from 2020-01-02
+        assert bundle.bars["MSFT"].is_synthetic is True
+    finally:
+        os.unlink(aapl)
+        os.unlink(msft)
+
+
+def test_synthetic_bar_excluded_from_history():
+    """Synthetic (carry-forward) bars are not stored in the deque."""
+    aapl = make_csv(AAPL_ROWS)
+    msft = make_csv(MSFT_ROWS)
+    try:
+        events = queue.Queue()
+        handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
+        handler.update_bars()  # 2020-01-02 — MSFT real
+        handler.update_bars()  # 2020-01-03 — MSFT synthetic (skipped from deque)
+        bars = handler.get_latest_bars("MSFT", 5)
+        assert len(bars) == 1                        # only the Jan 2 real bar
+        assert bars[0].close == 200.5
+        assert bars[0].is_synthetic is False
+    finally:
+        os.unlink(aapl)
+        os.unlink(msft)
+
+
+def test_real_bar_after_gap_resumes_history():
+    """A real bar after a synthetic gap resumes history normally."""
+    aapl = make_csv(AAPL_ROWS)
+    msft = make_csv(MSFT_ROWS)
+    try:
+        events = queue.Queue()
+        handler = MultiCSVDataHandler(events.put, ["AAPL", "MSFT"], [aapl, msft])
+        handler.update_bars()  # 2020-01-02 — MSFT real
+        handler.update_bars()  # 2020-01-03 — MSFT synthetic
+        handler.update_bars()  # 2020-01-04 — MSFT real again
+        bars = handler.get_latest_bars("MSFT", 5)
+        assert len(bars) == 2                        # Jan 2 and Jan 4 — no synthetic
+        assert bars[0].close == 200.5                # Jan 2
+        assert bars[1].close == 201.0                # Jan 4
     finally:
         os.unlink(aapl)
         os.unlink(msft)

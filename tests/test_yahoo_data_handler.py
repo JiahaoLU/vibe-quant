@@ -113,8 +113,8 @@ def test_handler_timeline_is_union_of_symbol_timestamps():
     assert count == 3
 
 
-def test_handler_missing_bar_is_zero_filled():
-    # On Jan 3 MSFT has no bar — should be zero-filled
+def test_handler_missing_bar_is_carry_forwarded():
+    """Missing bar uses last known real price, not zero."""
     fetch = _make_fetch({"AAPL": AAPL_ROWS, "MSFT": MSFT_ROWS})
     collected = []
     handler = YahooDataHandler(collected.append, ["AAPL", "MSFT"], "2020-01-01", "2020-01-05", fetch=fetch)
@@ -122,7 +122,22 @@ def test_handler_missing_bar_is_zero_filled():
     handler.update_bars()  # Jan 3 — MSFT missing
     bundle = collected[1]
     assert bundle.bars["AAPL"].close == 101.0
-    assert bundle.bars["MSFT"].close == 0.0
+    assert bundle.bars["AAPL"].is_synthetic is False
+    assert bundle.bars["MSFT"].close == 200.5   # carry-forward from Jan 2
+    assert bundle.bars["MSFT"].is_synthetic is True
+
+
+def test_handler_synthetic_bar_excluded_from_history():
+    """Synthetic (carry-forward) bars are not stored in the deque."""
+    fetch = _make_fetch({"AAPL": AAPL_ROWS, "MSFT": MSFT_ROWS})
+    collected = []
+    handler = YahooDataHandler(collected.append, ["AAPL", "MSFT"], "2020-01-01", "2020-01-05", fetch=fetch)
+    handler.update_bars()  # Jan 2 — MSFT real
+    handler.update_bars()  # Jan 3 — MSFT synthetic (skipped from deque)
+    bars = handler.get_latest_bars("MSFT", 5)
+    assert len(bars) == 1                        # only the Jan 2 real bar
+    assert bars[0].close == 200.5
+    assert bars[0].is_synthetic is False
 
 
 def test_handler_get_latest_bars_returns_history():

@@ -59,15 +59,28 @@ class MultiCSVDataHandler(DataHandler):
             all_ts.update(data.keys())
         timeline = sorted(all_ts)
 
+        last_real: dict[str, TickEvent | None] = {s: None for s in symbols}
         self._merged: list[tuple[datetime, dict[str, TickEvent]]] = []
         for ts in timeline:
-            bundle = {
-                symbol: raw[symbol].get(
-                    ts,
-                    TickEvent(symbol=symbol, timestamp=ts, open=0.0, high=0.0, low=0.0, close=0.0, volume=0.0),
-                )
-                for symbol in symbols
-            }
+            bundle: dict[str, TickEvent] = {}
+            for symbol in symbols:
+                if ts in raw[symbol]:
+                    bar = raw[symbol][ts]
+                    last_real[symbol] = bar
+                    bundle[symbol] = bar
+                elif last_real[symbol] is not None:
+                    prev = last_real[symbol]
+                    bundle[symbol] = TickEvent(
+                        symbol=symbol, timestamp=ts,
+                        open=prev.close, high=prev.close, low=prev.close, close=prev.close,
+                        volume=0.0, is_synthetic=True,
+                    )
+                else:
+                    bundle[symbol] = TickEvent(
+                        symbol=symbol, timestamp=ts,
+                        open=0.0, high=0.0, low=0.0, close=0.0,
+                        volume=0.0, is_synthetic=True,
+                    )
             self._merged.append((ts, bundle))
 
         self._index = 0
@@ -139,7 +152,8 @@ class MultiCSVDataHandler(DataHandler):
         ts, bars = self._merged[self._index]
         self._index += 1
         for symbol, bar in bars.items():
-            self._history[symbol].append(bar)
+            if not bar.is_synthetic:
+                self._history[symbol].append(bar)
         self._emit(BarBundleEvent(timestamp=ts, bars=bars))
         return True
 
