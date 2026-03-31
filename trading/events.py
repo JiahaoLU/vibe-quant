@@ -5,10 +5,10 @@ from typing import Literal  # noqa: F401 — kept for OrderEvent/FillEvent
 
 
 class EventType(Enum):
-    BAR_BUNDLE    = auto()
-    SIGNAL_BUNDLE = auto()
-    ORDER         = auto()
-    FILL          = auto()
+    BAR_BUNDLE      = auto()
+    STRATEGY_BUNDLE = auto()
+    ORDER           = auto()
+    FILL            = auto()
 
 
 @dataclass
@@ -44,10 +44,17 @@ class SignalEvent:               # value type — not an Event subclass, not que
 
 
 @dataclass
-class SignalBundleEvent(Event):
+class SignalBundleEvent:         # value type — not queued; used internally by strategies and StrategyContainer
     timestamp: datetime
     signals:   dict[str, SignalEvent]   # symbol → signal
-    type: EventType = field(default=EventType.SIGNAL_BUNDLE, init=False)
+
+
+@dataclass
+class StrategyBundleEvent(Event):
+    timestamp:    datetime
+    combined:     dict[str, SignalEvent]        # aggregated signal per symbol (used by portfolio fill logic)
+    per_strategy: dict[str, dict[str, float]]  # strategy_id → symbol → fractional weight (sums to 1.0 per symbol)
+    type: EventType = field(default=EventType.STRATEGY_BUNDLE, init=False)
 
 
 @dataclass
@@ -57,7 +64,7 @@ class OrderEvent(Event):
     order_type:      Literal["MARKET", "LIMIT"]
     direction:       Literal["BUY", "SELL", "HOLD"]
     quantity:        int
-    reference_price: float = 0.0  # fill reference price (next bar's open for EOD signals); execution handler applies slippage
+    reference_price: float = 0.0
     type: EventType = field(default=EventType.ORDER, init=False)
 
 

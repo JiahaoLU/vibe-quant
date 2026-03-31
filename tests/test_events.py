@@ -2,7 +2,7 @@ from datetime import datetime
 
 from trading.events import (
     EventType, Event, BarBundleEvent, SignalEvent, SignalBundleEvent,
-    OrderEvent, FillEvent, TickEvent,
+    StrategyBundleEvent, OrderEvent, FillEvent, TickEvent,
 )
 
 
@@ -13,12 +13,6 @@ def test_bar_bundle_event_type():
         bars={"AAPL": TickEvent(symbol="AAPL", timestamp=ts, open=100.0, high=101.0, low=99.0, close=100.5, volume=1000.0)},
     )
     assert e.type == EventType.BAR_BUNDLE
-
-
-def test_signal_bundle_event_type():
-    sig = SignalEvent(symbol="AAPL", timestamp=datetime(2020, 1, 2), signal=1.0)
-    e = SignalBundleEvent(timestamp=datetime(2020, 1, 2), signals={"AAPL": sig})
-    assert e.type == EventType.SIGNAL_BUNDLE
 
 
 def test_signal_event_is_not_event_subclass():
@@ -47,3 +41,18 @@ def test_fill_event_type():
         direction="BUY", quantity=10, fill_price=100.5, commission=1.0,
     )
     assert e.type == EventType.FILL
+
+
+def test_strategy_bundle_event_type():
+    ts = datetime(2020, 1, 2)
+    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=0.8)
+    e = StrategyBundleEvent(
+        timestamp=ts,
+        combined={"AAPL": sig},
+        per_strategy={"strat_0": {"AAPL": 1.0}},
+    )
+    assert e.type == EventType.STRATEGY_BUNDLE
+
+
+def test_signal_bundle_is_not_event_subclass():
+    assert not issubclass(SignalBundleEvent, Event)
