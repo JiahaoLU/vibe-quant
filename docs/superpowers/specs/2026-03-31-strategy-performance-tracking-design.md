@@ -41,7 +41,19 @@ weight_i = nominal_i / total_nominal
 per_strategy[strategy_id][symbol] = weight_i * carried_i[symbol] / combined[symbol]
 ```
 
-This fraction represents strategy `i`'s share of the combined signal for each symbol. It sums to 1.0 across strategies per symbol when `combined[symbol] != 0`. Symbols where `combined[symbol] == 0` are omitted from `per_strategy` (no fill will occur).
+This fraction represents strategy `i`'s share of the combined signal for each symbol. It sums to 1.0 across strategies per symbol when `combined[symbol] != 0`.
+
+**Full-exit case (`combined[symbol] == 0`):** Dividing by zero is avoided, but a full exit (all strategies go flat) still generates a SELL fill. Rather than omitting the symbol and leaving its closing PnL unattributed, attribution is distributed equally among all strategies that held a non-zero carry at the previous bar:
+
+```
+previously_long = [i for i in strategies if carried_i[symbol] != 0]
+per_strategy[strategy_id][symbol] = 1.0 / len(previously_long)   # for each i in previously_long
+                                    0.0                            # for others
+```
+
+If no strategy had a carry (e.g. a synthetic SELL from a data anomaly), the symbol is omitted and the fill goes unattributed — acceptable as a degenerate edge case.
+
+**Assumption:** `carried_i[symbol] >= 0` for all strategies. This holds as long as strategies do not emit short signals (currently prohibited by `SimplePortfolio`'s clamp). If short signals are ever introduced, the attribution formula must be revisited.
 
 The container emits a `StrategyBundleEvent` instead of `SignalBundleEvent`.
 
@@ -106,8 +118,21 @@ One change: `SIGNAL_BUNDLE` case renamed to `STRATEGY_BUNDLE` in the match block
 | `trading/backtester.py` | `SIGNAL_BUNDLE` → `STRATEGY_BUNDLE` |
 | `run_backtest.py` | Export `strategy_pnl.csv`, print per-strategy summary |
 
-## Out of Scope
+## Known Limitations
 
-- Unrealized PnL per strategy (requires lot-level attribution)
-- Short positions (already prohibited by `SimplePortfolio`)
-- Per-strategy drawdown or Sharpe metrics (post-processing concern)
+- **Partial-exit SELL attribution:** When a partial SELL occurs (combined signal decreases but stays > 0), attribution fractions are based on *current* signal levels, not on which strategy's signal changed. The strategy that caused the reduction gets 0% credit if its current signal is 0. This is a deliberate simplification — delta-based attribution would require tracking signal changes per bar.
+- **Unrealized PnL per strategy:** Not tracked (requires lot-level attribution).
+- **Short positions:** Currently prohibited by `SimplePortfolio`; attribution math assumes non-negative carries.
+- **Per-strategy drawdown or Sharpe:** Post-processing concern, out of scope.
+
+## Testing Requirements
+
+Tests must cover:
+
+- **Single-strategy:** attribution fraction is always 1.0; realized PnL equals total portfolio cash impact.
+- **Two strategies, equal nominal, equal signal:** each gets 50% of every fill's PnL.
+- **Two strategies, unequal nominal:** fractions proportional to `nominal_i / total_nominal`.
+- **Full-exit SELL (combined == 0):** closing fill PnL is split equally among previously-long strategies; no unattributed cash.
+- **Partial-exit SELL (combined > 0 but decreased):** fill is attributed by current signal weights; no crash.
+- **Commission split:** each strategy's realized PnL is reduced by its share of commission.
+- **Strategy naming:** fallback id uses `ClassName_index` when `name` is empty.
