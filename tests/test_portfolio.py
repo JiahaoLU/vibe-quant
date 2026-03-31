@@ -1,7 +1,9 @@
 from datetime import datetime
 
 from trading.impl.simple_portfolio import SimplePortfolio
-from trading.events import BarBundleEvent, FillEvent, OrderEvent, SignalBundleEvent, SignalEvent, TickEvent
+from trading.events import (
+    BarBundleEvent, FillEvent, OrderEvent, StrategyBundleEvent, SignalEvent, TickEvent,
+)
 
 
 def _get_bars(prices: dict[str, float]):
@@ -11,10 +13,14 @@ def _get_bars(prices: dict[str, float]):
     return get_bars
 
 
-def _signal_bundle(symbol: str, signal: float, ts=None) -> SignalBundleEvent:
+def _strategy_bundle(symbol: str, signal: float, ts=None, strategy_id: str = "test") -> StrategyBundleEvent:
     ts = ts or datetime(2020, 1, 2)
     sig = SignalEvent(symbol=symbol, timestamp=ts, signal=signal)
-    return SignalBundleEvent(timestamp=ts, signals={symbol: sig})
+    return StrategyBundleEvent(
+        timestamp=ts,
+        combined={symbol: sig},
+        per_strategy={strategy_id: {symbol: 1.0}} if signal > 0 else {},
+    )
 
 
 def _fill(symbol: str, direction: str, quantity: int, price: float) -> FillEvent:
@@ -42,7 +48,7 @@ def test_long_signal_emits_buy_order():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", 1.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     assert len(collected) == 1
@@ -64,7 +70,7 @@ def test_long_signal_topup_when_partial_holdings():
                           direction="BUY", quantity=50, fill_price=100.0, commission=0.0))
     collected.clear()
 
-    portfolio.on_signal(_signal_bundle("AAPL", 1.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     # target = int(1.0 * 10_000 / 100) = 100; held = 50; delta = 50; cost = 5000 ≤ cash 5000
@@ -79,7 +85,7 @@ def test_exit_signal_emits_sell_order():
     portfolio.on_fill(_fill("AAPL", "BUY", 50, 100.0))
     collected.clear()
 
-    portfolio.on_signal(_signal_bundle("AAPL", 0.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 0.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     assert len(collected) == 1
@@ -91,7 +97,7 @@ def test_exit_signal_no_order_when_no_holdings():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", 0.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 0.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     assert len(collected) == 1
@@ -106,7 +112,7 @@ def test_short_signal_treated_as_exit():
     portfolio.on_fill(_fill("AAPL", "BUY", 50, 100.0))
     collected.clear()
 
-    portfolio.on_signal(_signal_bundle("AAPL", -0.5))
+    portfolio.on_signal(_strategy_bundle("AAPL", -0.5))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     assert len(collected) == 1
@@ -119,7 +125,7 @@ def test_short_signal_no_order_when_flat():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", -1.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", -1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     assert len(collected) == 1
@@ -159,7 +165,7 @@ def test_long_signal_no_order_when_no_cash():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=50.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", 1.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
 
     # target = int(1.0 * 50 / 100) = 0 → delta = 0 → no real order → HOLD
@@ -175,11 +181,14 @@ def test_multi_symbol_normalised_signals_do_not_overdraw_cash():
     portfolio = SimplePortfolio(collected.append, _get_bars(prices), ["AAPL", "MSFT"], initial_capital=10_000.0)
 
     ts = datetime(2020, 1, 2)
-    bundle = SignalBundleEvent(
+    bundle = StrategyBundleEvent(
         timestamp=ts,
-        signals={
+        combined={
             "AAPL": SignalEvent(symbol="AAPL", timestamp=ts, signal=0.5),
             "MSFT": SignalEvent(symbol="MSFT", timestamp=ts, signal=0.5),
+        },
+        per_strategy={
+            "test": {"AAPL": 1.0, "MSFT": 1.0},
         },
     )
     portfolio.on_signal(bundle)
@@ -203,7 +212,7 @@ def test_fill_pending_orders_uses_open_price():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", 1.0))  # signal at close=100
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))  # signal at close=100
 
     fill_ts = datetime(2020, 1, 3)
     fill_bar = BarBundleEvent(
@@ -234,7 +243,7 @@ def test_pending_signals_cleared_after_fill():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", 1.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))  # emits BUY
     collected.clear()
 
@@ -250,7 +259,7 @@ def test_on_signal_does_not_emit_orders_directly():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
 
-    portfolio.on_signal(_signal_bundle("AAPL", 1.0))
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
 
     assert collected == []
 
