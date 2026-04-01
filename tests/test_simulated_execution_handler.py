@@ -1,8 +1,6 @@
 import math
 from datetime import datetime
 
-import pytest
-
 from trading.events import FillEvent, OrderEvent
 from trading.impl.simulated_execution_handler import SimulatedExecutionHandler
 
