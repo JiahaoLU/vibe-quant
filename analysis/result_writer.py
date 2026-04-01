@@ -77,7 +77,7 @@ class DefaultResultWriter(BacktestResultWriter):
         self._plot_equity_curve(curve)
         self._plot_drawdown(curve)
         self._plot_trades(curve)
-        self._plot_strategy_pnl(portfolio.strategy_pnl, curve)
+        self._plot_strategy_pnl(portfolio.strategy_pnl, curve, strategy_metrics)
 
     # ------------------------------------------------------------------
     # File helpers
@@ -180,11 +180,24 @@ class DefaultResultWriter(BacktestResultWriter):
             traded   = strategy_traded_value.get(sid, 0.0)
             turnover = traded / ic / years if ic else float("nan")
 
+            final_pnl  = pnl_series[-1] if pnl_series else 0.0
+            total_ret  = final_pnl / ic * 100 if ic else float("nan")
+            cagr       = ((1 + final_pnl / ic) ** (1 / years) - 1) * 100 if ic else float("nan")
+
+            peak   = 0.0
+            max_dd = 0.0
+            for pnl in pnl_series:
+                peak   = max(peak, pnl)
+                max_dd = min(max_dd, (pnl - peak) / ic * 100 if ic else 0.0)
+
             rows.append({
-                "strategy_id":   sid,
-                "sharpe":        sharpe,
-                "sortino":       sortino,
-                "turnover_rate": turnover,
+                "strategy_id":      sid,
+                "total_return_pct": total_ret,
+                "cagr_pct":         cagr,
+                "max_drawdown_pct": max_dd,
+                "sharpe":           sharpe,
+                "sortino":          sortino,
+                "turnover_rate":    turnover,
             })
 
         return rows
@@ -257,14 +270,18 @@ class DefaultResultWriter(BacktestResultWriter):
             print("\nStrategy metrics (per-fill returns, annualised ×√252):")
             for row in strategy_metrics:
                 sid      = row["strategy_id"]
+                ret      = row["total_return_pct"]
+                cagr     = row["cagr_pct"]
+                max_dd   = row["max_drawdown_pct"]
                 sharpe   = row["sharpe"]
                 sortino  = row["sortino"]
                 turnover = row["turnover_rate"]
                 sharpe_s  = f"{sharpe:>6.2f}"  if sharpe  == sharpe  else "   nan"
                 sortino_s = f"{sortino:>6.2f}" if sortino == sortino  else "   nan"
                 print(
-                    f"  {sid:<30}  sharpe={sharpe_s}  "
-                    f"sortino={sortino_s}  turnover={turnover:.1f}×/yr"
+                    f"  {sid:<30}  ret={ret:>+7.2f}%  cagr={cagr:>+7.2f}%"
+                    f"  maxdd={max_dd:>7.2f}%  sharpe={sharpe_s}"
+                    f"  sortino={sortino_s}  turnover={turnover:.1f}×/yr"
                 )
 
     # ------------------------------------------------------------------
@@ -361,12 +378,19 @@ class DefaultResultWriter(BacktestResultWriter):
         _save_fig(fig, self._file_path("trades", plot=True))
         print(f"Plot: trades        → {self._file_path('trades', plot=True)}")
 
-    def _plot_strategy_pnl(self, strategy_pnl: list[dict], curve: list[dict]) -> None:
+    def _plot_strategy_pnl(
+        self,
+        strategy_pnl:     list[dict],
+        curve:            list[dict],
+        strategy_metrics: list[dict],
+    ) -> None:
         if not strategy_pnl:
             return
         strategy_ids = [k for k in strategy_pnl[-1] if k != "timestamp"]
         if not strategy_ids:
             return
+
+        metrics_by_id = {row["strategy_id"]: row for row in strategy_metrics}
 
         COLORS     = ["steelblue", "darkorange", "green", "purple", "brown"]
         fill_dates = [r["timestamp"] for r in curve]
@@ -374,8 +398,18 @@ class DefaultResultWriter(BacktestResultWriter):
         fig, ax = plt.subplots(figsize=(13, 4))
         for idx, sid in enumerate(strategy_ids):
             values = [row.get(sid, 0.0) for row in strategy_pnl]
+            m = metrics_by_id.get(sid)
+            if m:
+                label = (
+                    f"{sid}  "
+                    f"ret={m['total_return_pct']:+.1f}%  "
+                    f"cagr={m['cagr_pct']:+.1f}%  "
+                    f"maxdd={m['max_drawdown_pct']:.1f}%"
+                )
+            else:
+                label = sid
             ax.plot(fill_dates, values, color=COLORS[idx % len(COLORS)],
-                    linewidth=1.5, label=sid)
+                    linewidth=1.5, label=label)
 
         ax.axhline(0, color="gray", linewidth=0.8, linestyle="--")
         _fmt_x(ax)
