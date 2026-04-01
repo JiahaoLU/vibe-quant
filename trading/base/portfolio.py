@@ -20,3 +20,7 @@ class Portfolio(ABC):
     @property
     @abstractmethod
     def equity_curve(self) -> list[dict]: ...
+
+    @property
+    @abstractmethod
+    def strategy_pnl(self) -> list[dict]: ...

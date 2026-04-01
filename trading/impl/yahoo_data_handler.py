@@ -110,3 +110,17 @@ class YahooDataHandler(DataHandler):
     def get_latest_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         bars = list(self._history[symbol])
         return bars[-n:] if len(bars) >= n else bars
+
+    @property
+    def symbol_bars(self) -> dict[str, tuple[list, list]]:
+        """Return (dates, closes) for real (non-synthetic) bars per symbol."""
+        result: dict[str, tuple[list, list]] = {}
+        for symbol in self._symbols:
+            dates, closes = [], []
+            for ts, bars in self._merged:
+                bar = bars.get(symbol)
+                if bar and not bar.is_synthetic:
+                    dates.append(ts)
+                    closes.append(bar.close)
+            result[symbol] = (dates, closes)
+        return result

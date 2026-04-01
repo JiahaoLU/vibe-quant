@@ -12,5 +12,6 @@ pytest>=7.0
 # External data sources (outside the core engine):
 yfinance>=0.2
 
-# Optional — makes post-run analysis cleaner (not used yet):
-# pandas>=2.0
+# Result writing and analysis (DefaultResultWriter):
+pandas>=2.0
+pyarrow>=14.0

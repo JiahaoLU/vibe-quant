@@ -1,26 +1,29 @@
 import queue
 
-from .base.data      import DataHandler
-from .base.execution import ExecutionHandler
-from .base.portfolio import Portfolio
-from .base.strategy  import StrategySignalGenerator
-from .events         import EventType
+from .base.data          import DataHandler
+from .base.execution     import ExecutionHandler
+from .base.portfolio     import Portfolio
+from .base.result_writer import BacktestResultWriter
+from .base.strategy      import StrategySignalGenerator
+from .events             import EventType
 
 
 class Backtester:
     def __init__(
         self,
-        events:    queue.Queue,
-        data:      DataHandler,
-        strategy:  StrategySignalGenerator,
-        portfolio: Portfolio,
-        execution: ExecutionHandler,
+        events:         queue.Queue,
+        data:           DataHandler,
+        strategy:       StrategySignalGenerator,
+        portfolio:      Portfolio,
+        execution:      ExecutionHandler,
+        result_writer:  BacktestResultWriter | None = None,
     ):
-        self._events    = events
-        self._data      = data
-        self._strategy  = strategy
-        self._portfolio = portfolio
-        self._execution = execution
+        self._events        = events
+        self._data          = data
+        self._strategy      = strategy
+        self._portfolio     = portfolio
+        self._execution     = execution
+        self._result_writer = result_writer
 
     def run(self) -> None:
         while True:
@@ -51,3 +54,6 @@ class Backtester:
                     self._execution.execute_order(event)
                 case EventType.FILL:
                     self._portfolio.on_fill(event)
+
+        if self._result_writer is not None:
+            self._result_writer.write(self._portfolio)
