@@ -24,3 +24,7 @@ class Portfolio(ABC):
     @property
     @abstractmethod
     def strategy_pnl(self) -> list[dict]: ...
+
+    @property
+    @abstractmethod
+    def strategy_traded_value(self) -> dict[str, float]: ...

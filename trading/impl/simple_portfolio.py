@@ -32,6 +32,7 @@ class SimplePortfolio(Portfolio):
         self._pending_signals: StrategyBundleEvent | None = None
         self._current_attribution: dict[str, dict[str, float]] = {}
         self._strategy_realized_pnl: dict[str, float] = {}
+        self._strategy_traded_value: dict[str, float] = {}
 
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
         pending = self._pending_signals
@@ -98,11 +99,15 @@ class SimplePortfolio(Portfolio):
             # Apportion fill's cash impact across strategies
             # commission is always a cost (positive); add it regardless of direction
             fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
+            trade_value = event.fill_price * event.quantity
             for strategy_id, symbol_weights in self._current_attribution.items():
                 share = symbol_weights.get(event.symbol, 0.0)
                 if share:
                     self._strategy_realized_pnl[strategy_id] = (
                         self._strategy_realized_pnl.get(strategy_id, 0.0) - share * fill_cash_impact
+                    )
+                    self._strategy_traded_value[strategy_id] = (
+                        self._strategy_traded_value.get(strategy_id, 0.0) + share * trade_value
                     )
 
         market_value = 0.0
@@ -130,3 +135,7 @@ class SimplePortfolio(Portfolio):
             {"timestamp": row["timestamp"], **row["strategy_pnl"]}
             for row in self._equity_curve
         ]
+
+    @property
+    def strategy_traded_value(self) -> dict[str, float]:
+        return self._strategy_traded_value

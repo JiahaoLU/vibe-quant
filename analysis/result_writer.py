@@ -67,8 +67,12 @@ class DefaultResultWriter(BacktestResultWriter):
 
         self._write_equity_curve(curve)
         self._write_strategy_pnl(portfolio.strategy_pnl)
+        strategy_metrics = self._write_strategy_metrics(
+            portfolio.strategy_pnl,
+            portfolio.strategy_traded_value,
+        )
         metrics = self._write_summary_metrics(curve)
-        self._print_summary(metrics, portfolio.strategy_pnl)
+        self._print_summary(metrics, portfolio.strategy_pnl, strategy_metrics)
 
         self._plot_equity_curve(curve)
         self._plot_drawdown(curve)
@@ -120,6 +124,71 @@ class DefaultResultWriter(BacktestResultWriter):
         path = self._save_df(df, "strategy_pnl")
         print(f"Strategy PnL    : {path}")
 
+    def _write_strategy_metrics(
+        self,
+        strategy_pnl:          list[dict],
+        strategy_traded_value: dict[str, float],
+    ) -> list[dict]:
+        rows = self._compute_strategy_metrics(strategy_pnl, strategy_traded_value)
+        if not rows:
+            return rows
+        path = self._save_df(pd.DataFrame(rows), "strategy_metrics")
+        print(f"Strategy metrics: {path}")
+        return rows
+
+    def _compute_strategy_metrics(
+        self,
+        strategy_pnl:          list[dict],
+        strategy_traded_value: dict[str, float],
+    ) -> list[dict]:
+        if not strategy_pnl:
+            return []
+        strategy_ids = [k for k in strategy_pnl[-1] if k != "timestamp"]
+        if not strategy_ids:
+            return []
+
+        ic    = self._initial_capital
+        t0    = strategy_pnl[0]["timestamp"]
+        t1    = strategy_pnl[-1]["timestamp"]
+        years = max((t1 - t0).days / 365.25, 1e-9)
+
+        rows = []
+        for sid in strategy_ids:
+            pnl_series = [row.get(sid, 0.0) for row in strategy_pnl]
+            returns = [
+                (pnl_series[i] - pnl_series[i - 1]) / ic
+                for i in range(1, len(pnl_series))
+            ]
+
+            sharpe  = float("nan")
+            sortino = float("nan")
+            if len(returns) > 1:
+                n     = len(returns)
+                avg_r = sum(returns) / n
+                var_r = sum((r - avg_r) ** 2 for r in returns) / n
+                std_r = var_r ** 0.5
+                if std_r:
+                    sharpe = avg_r / std_r * (252 ** 0.5)
+
+                neg = [r for r in returns if r < 0]
+                if neg:
+                    down_var = sum(r ** 2 for r in neg) / n  # population semi-variance
+                    down_std = down_var ** 0.5
+                    if down_std:
+                        sortino = avg_r / down_std * (252 ** 0.5)
+
+            traded   = strategy_traded_value.get(sid, 0.0)
+            turnover = traded / ic / years if ic else float("nan")
+
+            rows.append({
+                "strategy_id":   sid,
+                "sharpe":        sharpe,
+                "sortino":       sortino,
+                "turnover_rate": turnover,
+            })
+
+        return rows
+
     def _write_summary_metrics(self, curve: list[dict]) -> dict:
         equity     = [r["equity"] for r in curve]
         timestamps = [r["timestamp"] for r in curve]
@@ -163,7 +232,12 @@ class DefaultResultWriter(BacktestResultWriter):
     # Console summary
     # ------------------------------------------------------------------
 
-    def _print_summary(self, metrics: dict, strategy_pnl: list[dict]) -> None:
+    def _print_summary(
+        self,
+        metrics:          dict,
+        strategy_pnl:     list[dict],
+        strategy_metrics: list[dict],
+    ) -> None:
         ic = metrics["initial_capital"]
         print()
         print(f"Initial capital : ${ic:>10,.2f}")
@@ -178,6 +252,20 @@ class DefaultResultWriter(BacktestResultWriter):
                 print("\nStrategy realized PnL:")
                 for sid in sorted(ids):
                     print(f"  {sid:<30} ${final_row[sid]:>+10,.2f}")
+
+        if strategy_metrics:
+            print("\nStrategy metrics (per-fill returns, annualised ×√252):")
+            for row in strategy_metrics:
+                sid      = row["strategy_id"]
+                sharpe   = row["sharpe"]
+                sortino  = row["sortino"]
+                turnover = row["turnover_rate"]
+                sharpe_s  = f"{sharpe:>6.2f}"  if sharpe  == sharpe  else "   nan"
+                sortino_s = f"{sortino:>6.2f}" if sortino == sortino  else "   nan"
+                print(
+                    f"  {sid:<30}  sharpe={sharpe_s}  "
+                    f"sortino={sortino_s}  turnover={turnover:.1f}×/yr"
+                )
 
     # ------------------------------------------------------------------
     # Plots
