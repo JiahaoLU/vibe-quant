@@ -56,3 +56,31 @@ def test_strategy_bundle_event_type():
 
 def test_signal_bundle_is_not_event_subclass():
     assert not issubclass(SignalBundleEvent, Event)
+
+
+def test_order_event_carries_bar_data_fields():
+    order = OrderEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        order_type="MARKET", direction="BUY", quantity=10,
+        reference_price=100.0,
+        bar_volume=50_000.0, bar_high=101.0, bar_low=99.0,
+        bar_close=100.5, bar_is_synthetic=False,
+    )
+    assert order.bar_volume == 50_000.0
+    assert order.bar_high == 101.0
+    assert order.bar_low == 99.0
+    assert order.bar_close == 100.5
+    assert order.bar_is_synthetic is False
+
+
+def test_order_event_bar_fields_default_to_zero():
+    order = OrderEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        order_type="MARKET", direction="BUY", quantity=10,
+        reference_price=100.0,
+    )
+    assert order.bar_volume == 0.0
+    assert order.bar_high == 0.0
+    assert order.bar_low == 0.0
+    assert order.bar_close == 0.0
+    assert order.bar_is_synthetic is False

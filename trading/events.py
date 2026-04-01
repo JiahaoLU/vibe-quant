@@ -64,7 +64,12 @@ class OrderEvent(Event):
     order_type:      Literal["MARKET", "LIMIT"]
     direction:       Literal["BUY", "SELL", "HOLD"]
     quantity:        int
-    reference_price: float = 0.0  # fill reference price (next bar's open for EOD signals); execution handler applies slippage
+    reference_price: float = 0.0   # fill reference price (next bar's open for EOD signals); execution handler applies slippage
+    bar_volume:      float = 0.0   # day's total volume (0.0 when unknown)
+    bar_high:        float = 0.0   # bar high; used for spread floor
+    bar_low:         float = 0.0   # bar low; used for spread floor
+    bar_close:       float = 0.0   # bar close; used for Parkinson vol normalisation
+    bar_is_synthetic: bool = False  # True when the bar is carry-forwarded; skip volume impact
     type: EventType = field(default=EventType.ORDER, init=False)
 
 
