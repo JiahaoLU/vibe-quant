@@ -1,7 +1,7 @@
 """
 Entry point — wire all components together and run the backtest.
 Modify SYMBOLS, START, END, INITIAL_CAPITAL, FAST_WINDOW, SLOW_WINDOW,
-COMMISSION, SLIPPAGE_PCT to experiment.
+COMMISSION_PCT, SLIPPAGE_PCT, MARKET_IMPACT_ETA to experiment.
 """
 import queue
 
