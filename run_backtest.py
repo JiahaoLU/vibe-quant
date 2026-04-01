@@ -17,16 +17,17 @@ from trading.impl import (
 )
 
 # --- Configuration -----------------------------------------------------------
-SYMBOLS         = ["AAPL", "MSFT"]
-START           = "2020-01-01"
-END             = "2022-01-01"
-INITIAL_CAPITAL = 10_000.0
-FAST_WINDOW     = 10
-SLOW_WINDOW     = 30
-COMMISSION_PCT  = 0.001  # 0.1% of trade value per fill
-SLIPPAGE_PCT    = 0.0005 # 0.05% of trade value per fill
-RESULTS_DIR     = "results"
-RESULTS_FORMAT  = "parquet"  # "parquet" or "csv"
+SYMBOLS            = ["AAPL", "MSFT"]
+START              = "2020-01-01"
+END                = "2022-01-01"
+INITIAL_CAPITAL    = 10_000.0
+FAST_WINDOW        = 10
+SLOW_WINDOW        = 30
+COMMISSION_PCT     = 0.001  # 0.1% of trade value per fill
+SLIPPAGE_PCT       = 0.0005 # fixed spread floor (one-way minimum cost)
+MARKET_IMPACT_ETA  = 0.1    # square-root impact coefficient (Almgren et al.)
+RESULTS_DIR        = "results"
+RESULTS_FORMAT     = "parquet"  # "parquet" or "csv"
 # -----------------------------------------------------------------------------
 
 events   = queue.Queue()
@@ -39,7 +40,12 @@ strategy.add(SMACrossoverStrategy, SMACrossoverStrategyParams(
 symbols   = strategy.symbols
 data      = YahooDataHandler(events.put, symbols, start=START, end=END, fetch=fetch_daily_bars)
 portfolio = SimplePortfolio(events.put, data.get_latest_bars, symbols, initial_capital=INITIAL_CAPITAL)
-execution = SimulatedExecutionHandler(events.put, commission_pct=COMMISSION_PCT, slippage_pct=SLIPPAGE_PCT)
+execution = SimulatedExecutionHandler(
+    events.put,
+    commission_pct    = COMMISSION_PCT,
+    slippage_pct      = SLIPPAGE_PCT,
+    market_impact_eta = MARKET_IMPACT_ETA,
+)
 
 writer = DefaultResultWriter(
     initial_capital = INITIAL_CAPITAL,

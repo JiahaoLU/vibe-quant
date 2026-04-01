@@ -36,7 +36,7 @@ def _handler(commission_pct=0.0, slippage_pct=0.0, market_impact_eta=0.0):
 
 def test_constructor_accepts_market_impact_eta():
     h, _ = _handler(market_impact_eta=0.1)
-    assert h is not None
+    assert h._market_impact_eta == 0.1
 
 
 # --- Tier 4: Synthetic guard -------------------------------------------
@@ -60,6 +60,16 @@ def test_synthetic_bar_no_division_by_zero():
     h, collected = _handler(slippage_pct=0.0, market_impact_eta=0.1)
     h.execute_order(_order(
         bar_volume=0.0, bar_is_synthetic=True,
+    ))
+    assert len(collected) == 1
+
+
+def test_real_bar_zero_close_does_not_raise():
+    """bar_close=0 on a non-synthetic bar must not raise ZeroDivisionError."""
+    h, collected = _handler(slippage_pct=0.001, market_impact_eta=0.1)
+    h.execute_order(_order(
+        bar_close=0.0, bar_high=105.0, bar_low=95.0,
+        bar_volume=10_000.0, bar_is_synthetic=False,
     ))
     assert len(collected) == 1
 
