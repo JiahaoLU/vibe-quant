@@ -33,6 +33,7 @@ class SimplePortfolio(Portfolio):
         self._current_attribution: dict[str, dict[str, float]] = {}
         self._strategy_realized_pnl: dict[str, float] = {}
         self._strategy_traded_value: dict[str, float] = {}
+        self._strategy_qty: dict[str, dict[str, float]] = {}  # sid → symbol → attributed shares held
 
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
         pending = self._pending_signals
@@ -106,7 +107,7 @@ class SimplePortfolio(Portfolio):
             self._holdings[event.symbol] = self._holdings.get(event.symbol, 0) + multiplier * event.quantity
             self._cash -= multiplier * event.fill_price * event.quantity + event.commission
 
-            # Apportion fill's cash impact across strategies
+            # Apportion fill's cash impact and share count across strategies
             # commission is always a cost (positive); add it regardless of direction
             fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
             trade_value = event.fill_price * event.quantity
@@ -119,20 +120,34 @@ class SimplePortfolio(Portfolio):
                     self._strategy_traded_value[strategy_id] = (
                         self._strategy_traded_value.get(strategy_id, 0.0) + share * trade_value
                     )
+                    sym_qty = self._strategy_qty.setdefault(strategy_id, {})
+                    sym_qty[event.symbol] = sym_qty.get(event.symbol, 0.0) + multiplier * share * event.quantity
 
         market_value = 0.0
+        strategy_market_value: dict[str, float] = {}
         for symbol in self._symbols:
             bars = self._get_bars(symbol, 1)
             if bars:
-                market_value += self._holdings.get(symbol, 0) * bars[-1].close
+                price = bars[-1].close
+                qty   = self._holdings.get(symbol, 0)
+                market_value += qty * price
+                for sid, sym_qty in self._strategy_qty.items():
+                    strategy_market_value[sid] = (
+                        strategy_market_value.get(sid, 0.0)
+                        + sym_qty.get(symbol, 0.0) * price
+                    )
 
         self._equity_curve.append({
-            "timestamp":    event.timestamp,
-            "cash":         self._cash,
-            "holdings":     dict(self._holdings),
-            "market_value": market_value,
-            "equity":       self._cash + market_value,
-            "strategy_pnl": dict(self._strategy_realized_pnl),
+            "timestamp":      event.timestamp,
+            "cash":           self._cash,
+            "holdings":       dict(self._holdings),
+            "market_value":   market_value,
+            "equity":         self._cash + market_value,
+            "strategy_pnl":   dict(self._strategy_realized_pnl),
+            "strategy_equity": {
+                sid: self._strategy_realized_pnl.get(sid, 0.0) + strategy_market_value.get(sid, 0.0)
+                for sid in self._strategy_realized_pnl
+            },
         })
 
     @property

@@ -68,6 +68,7 @@ class DefaultResultWriter(BacktestResultWriter):
         self._write_equity_curve(curve)
         self._write_strategy_pnl(portfolio.strategy_pnl)
         strategy_metrics = self._write_strategy_metrics(
+            curve,
             portfolio.strategy_pnl,
             portfolio.strategy_traded_value,
         )
@@ -126,10 +127,11 @@ class DefaultResultWriter(BacktestResultWriter):
 
     def _write_strategy_metrics(
         self,
+        curve:                 list[dict],
         strategy_pnl:          list[dict],
         strategy_traded_value: dict[str, float],
     ) -> list[dict]:
-        rows = self._compute_strategy_metrics(strategy_pnl, strategy_traded_value)
+        rows = self._compute_strategy_metrics(curve, strategy_pnl, strategy_traded_value)
         if not rows:
             return rows
         path = self._save_df(pd.DataFrame(rows), "strategy_metrics")
@@ -138,6 +140,7 @@ class DefaultResultWriter(BacktestResultWriter):
 
     def _compute_strategy_metrics(
         self,
+        curve:                 list[dict],
         strategy_pnl:          list[dict],
         strategy_traded_value: dict[str, float],
     ) -> list[dict]:
@@ -184,11 +187,12 @@ class DefaultResultWriter(BacktestResultWriter):
             total_ret  = final_pnl / ic * 100 if ic else float("nan")
             cagr       = ((1 + final_pnl / ic) ** (1 / years) - 1) * 100 if ic else float("nan")
 
-            peak   = 0.0
+            peak   = ic
             max_dd = 0.0
-            for pnl in pnl_series:
-                peak   = max(peak, pnl)
-                max_dd = min(max_dd, (pnl - peak) / ic * 100 if ic else 0.0)
+            for row in curve:
+                eq   = ic + row.get("strategy_equity", {}).get(sid, 0.0)
+                peak = max(peak, eq)
+                max_dd = min(max_dd, (eq - peak) / peak * 100 if peak else 0.0)
 
             rows.append({
                 "strategy_id":      sid,
