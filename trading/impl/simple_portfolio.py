@@ -58,22 +58,32 @@ class SimplePortfolio(Portfolio):
             if delta > 0 and available_cash >= delta * price:
                 available_cash -= delta * price
                 self._emit(OrderEvent(
-                    symbol          = symbol,
-                    timestamp       = bar_bundle.timestamp,
-                    order_type      = "MARKET",
-                    direction       = "BUY",
-                    quantity        = delta,
-                    reference_price = price,
+                    symbol           = symbol,
+                    timestamp        = bar_bundle.timestamp,
+                    order_type       = "MARKET",
+                    direction        = "BUY",
+                    quantity         = delta,
+                    reference_price  = price,
+                    bar_volume       = bar.volume,
+                    bar_high         = bar.high,
+                    bar_low          = bar.low,
+                    bar_close        = bar.close,
+                    bar_is_synthetic = bar.is_synthetic,
                 ))
                 emitted_any = True
             elif delta < 0:
                 self._emit(OrderEvent(
-                    symbol          = symbol,
-                    timestamp       = bar_bundle.timestamp,
-                    order_type      = "MARKET",
-                    direction       = "SELL",
-                    quantity        = abs(delta),
-                    reference_price = price,
+                    symbol           = symbol,
+                    timestamp        = bar_bundle.timestamp,
+                    order_type       = "MARKET",
+                    direction        = "SELL",
+                    quantity         = abs(delta),
+                    reference_price  = price,
+                    bar_volume       = bar.volume,
+                    bar_high         = bar.high,
+                    bar_low          = bar.low,
+                    bar_close        = bar.close,
+                    bar_is_synthetic = bar.is_synthetic,
                 ))
                 emitted_any = True
 

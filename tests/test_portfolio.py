@@ -412,3 +412,61 @@ def test_strategy_pnl_property_matches_equity_curve():
     assert len(rows) == 1
     assert "timestamp" in rows[0]
     assert "s1" in rows[0]
+
+
+def test_fill_pending_orders_populates_bar_fields_on_buy():
+    """BUY OrderEvent carries bar's volume/high/low/close/is_synthetic."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    ts_signal = datetime(2020, 1, 2)
+    portfolio.on_signal(StrategyBundleEvent(
+        timestamp=ts_signal,
+        combined={"AAPL": SignalEvent(symbol="AAPL", timestamp=ts_signal, signal=1.0)},
+        per_strategy={"s": {"AAPL": 1.0}},
+    ))
+
+    ts_fill = datetime(2020, 1, 3)
+    bar = TickEvent(symbol="AAPL", timestamp=ts_fill,
+                    open=102.0, high=105.0, low=98.0, close=103.0,
+                    volume=12_000.0, is_synthetic=False)
+    portfolio.fill_pending_orders(BarBundleEvent(timestamp=ts_fill, bars={"AAPL": bar}))
+
+    order = collected[0]
+    assert order.direction == "BUY"
+    assert order.bar_volume == 12_000.0
+    assert order.bar_high == 105.0
+    assert order.bar_low == 98.0
+    assert order.bar_close == 103.0
+    assert order.bar_is_synthetic is False
+
+
+def test_fill_pending_orders_populates_bar_fields_on_sell():
+    """SELL OrderEvent carries bar's volume/high/low/close/is_synthetic."""
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+    portfolio.on_fill(FillEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 1),
+        direction="BUY", quantity=50, fill_price=100.0, commission=0.0,
+    ))
+
+    ts_signal = datetime(2020, 1, 2)
+    portfolio.on_signal(StrategyBundleEvent(
+        timestamp=ts_signal,
+        combined={"AAPL": SignalEvent(symbol="AAPL", timestamp=ts_signal, signal=0.0)},
+        per_strategy={"s": {"AAPL": 1.0}},
+    ))
+
+    ts_fill = datetime(2020, 1, 3)
+    bar = TickEvent(symbol="AAPL", timestamp=ts_fill,
+                    open=110.0, high=112.0, low=108.0, close=111.0,
+                    volume=8_000.0, is_synthetic=True)
+    portfolio.fill_pending_orders(BarBundleEvent(timestamp=ts_fill, bars={"AAPL": bar}))
+
+    order = collected[0]
+    assert order.direction == "SELL"
+    assert order.bar_volume == 8_000.0
+    assert order.bar_high == 112.0
+    assert order.bar_low == 108.0
+    assert order.bar_close == 111.0
+    assert order.bar_is_synthetic is True

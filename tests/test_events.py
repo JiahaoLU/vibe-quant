@@ -84,3 +84,13 @@ def test_order_event_bar_fields_default_to_zero():
     assert order.bar_low == 0.0
     assert order.bar_close == 0.0
     assert order.bar_is_synthetic is False
+
+
+def test_order_event_bar_is_synthetic_true_round_trips():
+    """bar_is_synthetic=True is stored and retrieved correctly (guards Task 3 branch)."""
+    order = OrderEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        order_type="MARKET", direction="BUY", quantity=10,
+        reference_price=100.0, bar_is_synthetic=True,
+    )
+    assert order.bar_is_synthetic is True
