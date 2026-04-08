@@ -6,6 +6,7 @@ from datetime import datetime
 
 
 _BASE_URL = "https://yfiua.github.io/index-constituents"
+_MANIFEST_DIR = "data/universe_manifest"
 
 
 def _iter_months(start_dt: datetime, end_dt: datetime):
@@ -27,11 +28,14 @@ def _next_month_date(year: int, month: int) -> str:
     return f"{year:04d}-{month:02d}-01"
 
 
+def _manifest_path(index_code: str) -> str:
+    return os.path.join(_MANIFEST_DIR, f"{index_code}.csv")
+
+
 def fetch_universe_manifest(
     index_code: str,
     start: str,
     end: str,
-    output_path: str = "data/universe_manifest.csv",
 ) -> str:
     start_dt = datetime.fromisoformat(start)
     end_dt = datetime.fromisoformat(end)
@@ -78,7 +82,8 @@ def fetch_universe_manifest(
             }
         )
 
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    output_path = _manifest_path(index_code)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["symbol", "enter_date", "exit_date"])
         writer.writeheader()
@@ -91,9 +96,9 @@ def load_or_fetch_universe_manifest(
     index_code: str,
     start: str,
     end: str,
-    output_path: str = "data/universe_manifest.csv",
     reload: bool = False,
 ) -> str:
+    output_path = _manifest_path(index_code)
     if not reload and os.path.exists(output_path):
         return output_path
-    return fetch_universe_manifest(index_code, start, end, output_path)
+    return fetch_universe_manifest(index_code, start, end)

@@ -33,7 +33,6 @@ FILL_COST_BUFFER    = 0.002  # cash reserve fraction for slippage + commission o
 RESULTS_DIR         = "results"
 RESULTS_FORMAT      = "parquet"  # "parquet" or "csv"
 USE_UNIVERSE_GATING = True
-UNIVERSE_MANIFEST_FILE = "data/universe_manifest.csv"
 INDEX_CODE          = "sp500"
 RELOAD_UNIVERSE     = False
 # -----------------------------------------------------------------------------
@@ -53,7 +52,6 @@ if USE_UNIVERSE_GATING:
         INDEX_CODE,
         START,
         END,
-        output_path=UNIVERSE_MANIFEST_FILE,
         reload=RELOAD_UNIVERSE,
     )
     universe_builder = IndexConstituentsUniverseBuilder(manifest_path)
