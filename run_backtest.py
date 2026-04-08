@@ -26,6 +26,8 @@ INITIAL_CAPITAL    = 10_000.0
 COMMISSION_PCT     = 0.001  # 0.1% of trade value per fill
 SLIPPAGE_PCT       = 0.0005 # fixed spread floor (one-way minimum cost)
 MARKET_IMPACT_ETA  = 0.1    # square-root impact coefficient (Almgren et al.)
+MAX_LEVERAGE       = 1.0    # max gross exposure as a multiple of current equity
+FILL_COST_BUFFER   = 0.002  # cash reserve fraction for slippage + commission on buys
 RESULTS_DIR        = "results"
 RESULTS_FORMAT     = "parquet"  # "parquet" or "csv"
 # -----------------------------------------------------------------------------
@@ -40,7 +42,12 @@ for strategy_cls, params in loader.load_all():
 
 symbols   = strategy.symbols
 data      = YahooDataHandler(events.put, symbols, start=START, end=END, fetch=fetch_daily_bars)
-portfolio = SimplePortfolio(events.put, data.get_latest_bars, symbols, initial_capital=INITIAL_CAPITAL)
+portfolio = SimplePortfolio(
+    events.put, data.get_latest_bars, symbols,
+    initial_capital  = INITIAL_CAPITAL,
+    max_leverage     = MAX_LEVERAGE,
+    fill_cost_buffer = FILL_COST_BUFFER,
+)
 execution = SimulatedExecutionHandler(
     events.put,
     commission_pct    = COMMISSION_PCT,

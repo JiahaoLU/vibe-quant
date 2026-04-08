@@ -22,12 +22,16 @@ class SimplePortfolio(Portfolio):
         get_bars:        Callable[[str, int], list[TickEvent]],
         symbols:         list[str],
         initial_capital: float = 10_000.0,
+        max_leverage:    float = 1.0,
+        fill_cost_buffer: float = 0.002,
     ):
         super().__init__(emit)
         self._get_bars                = get_bars
         self._symbols                 = symbols
         self._cash                    = initial_capital
         self._initial_capital         = initial_capital
+        self._max_leverage            = max_leverage
+        self._fill_cost_buffer        = fill_cost_buffer
         self._holdings: dict[str, int] = {s: 0 for s in symbols}
         self._equity_curve: list[dict] = []
         self._pending_signals: StrategyBundleEvent | None = None
@@ -46,6 +50,16 @@ class SimplePortfolio(Portfolio):
 
         self._current_attribution = pending.per_strategy
         emitted_any = False
+
+        # Compute current holdings market value for leverage check
+        holdings_value = sum(
+            self._holdings.get(s, 0) * bars[-1].close
+            for s in self._symbols
+            if (bars := self._get_bars(s, 1))
+        )
+        current_equity = self._cash + holdings_value
+        max_gross_exposure = current_equity * self._max_leverage
+
         available_cash = self._cash
         for symbol, signal_event in pending.combined.items():
             # No shorts: clamp negative signals to zero
@@ -57,14 +71,21 @@ class SimplePortfolio(Portfolio):
             if price <= 0:
                 continue
 
-            target_qty  = int(weight * self._initial_capital / price)
-            current_qty = self._holdings.get(symbol, 0)
-            delta       = target_qty - current_qty
+            target_qty = int(weight * self._initial_capital / price)
+            delta      = target_qty - self._holdings.get(symbol, 0)
 
-            if delta > 0 and available_cash >= delta * price:
-                available_cash -= delta * price
-                self._emit_order(symbol, bar_bundle.timestamp, "BUY", delta, bar)
-                emitted_any = True
+            if delta > 0:
+                # Constraint 1: cash must cover order value + cost buffer (slippage + commission)
+                max_qty_by_cash = int(available_cash / (price * (1.0 + self._fill_cost_buffer)))
+                # Constraint 2: total gross exposure must not exceed equity × max_leverage
+                # current_exposure includes existing holdings + orders already placed this bar
+                current_exposure = holdings_value + (self._cash - available_cash)
+                max_qty_by_leverage = max(0, int((max_gross_exposure - current_exposure) / price))
+                affordable_qty = min(delta, max_qty_by_cash, max_qty_by_leverage)
+                if affordable_qty > 0:
+                    available_cash -= affordable_qty * price * (1.0 + self._fill_cost_buffer)
+                    self._emit_order(symbol, bar_bundle.timestamp, "BUY", affordable_qty, bar)
+                    emitted_any = True
             elif delta < 0:
                 self._emit_order(symbol, bar_bundle.timestamp, "SELL", abs(delta), bar)
                 emitted_any = True
@@ -102,12 +123,12 @@ class SimplePortfolio(Portfolio):
     def on_fill(self, event: FillEvent) -> None:
         if event.direction != "HOLD":
             multiplier = 1 if event.direction == "BUY" else -1
+            fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
             self._holdings[event.symbol] = self._holdings.get(event.symbol, 0) + multiplier * event.quantity
-            self._cash -= multiplier * event.fill_price * event.quantity + event.commission
+            self._cash -= fill_cash_impact
 
             # Apportion fill's cash impact and share count across strategies
             # commission is always a cost (positive); add it regardless of direction
-            fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
             trade_value = event.fill_price * event.quantity
             for strategy_id, symbol_weights in self._current_attribution.items():
                 share = symbol_weights.get(event.symbol, 0.0)
