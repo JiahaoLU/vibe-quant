@@ -3,7 +3,7 @@ from typing import Callable
 from trading.base.strategy_params import StrategyParams
 
 from ..base.strategy import Strategy, StrategySignalGenerator
-from ..events import BarBundleEvent, Event, SignalBundleEvent, StrategyBundleEvent, SignalEvent, TickEvent
+from ..events import BarBundleEvent, Event, StrategyBundleEvent, SignalEvent, TickEvent
 
 
 class StrategyContainer(StrategySignalGenerator):
@@ -58,8 +58,7 @@ class StrategyContainer(StrategySignalGenerator):
         get_bars: Callable[[str, int], list[TickEvent]] | None = None,
     ) -> None:
         """Factory: construct a strategy and register it with its nominal."""
-        index = len(self._strategies)
-        strategy_id = strategy_params.name if strategy_params.name else f"{strategy_class.__name__}_{index}"
+        strategy_id = strategy_params.name or f"{strategy_class.__name__}_{len(self._strategies)}"
         if strategy_id in self._ids:
             raise ValueError(f"Strategy id {strategy_id!r} is already registered")
         instance = strategy_class(
@@ -76,11 +75,9 @@ class StrategyContainer(StrategySignalGenerator):
         Note: the strategy ID is always auto-generated as ClassName_index.
         To use a custom name, register via add() with StrategyParams.name instead.
         """
-        index = len(self._strategies)
-        strategy_id = f"{strategy.__class__.__name__}_{index}"
         self._strategies.append((strategy, nominal))
         self._carried.append({})
-        self._ids.append(strategy_id)
+        self._ids.append(f"{strategy.__class__.__name__}_{len(self._strategies) - 1}")
 
     def get_signals(self, event: BarBundleEvent) -> None:
         # Snapshot carries before updating — needed for full-exit attribution
@@ -99,28 +96,26 @@ class StrategyContainer(StrategySignalGenerator):
             return
 
         total_nominal = sum(n for _, n in self._strategies) or 1.0
+        weights = [n / total_nominal for _, n in self._strategies]
 
         # Weighted sum across all carried signals
         combined: dict[str, float] = {}
-        for i, (_, nominal) in enumerate(self._strategies):
-            weight = nominal / total_nominal
+        for i, weight in enumerate(weights):
             for symbol, signal_val in self._carried[i].items():
                 combined[symbol] = combined.get(symbol, 0.0) + signal_val * weight
 
         if not combined:
             return
 
-        # Compute per-strategy attribution fractions
+        # Delta-based attribution: buys go to strategies that raised their signal,
+        # sells go to strategies that lowered their signal.  This keeps
+        # _strategy_qty in the portfolio accurate so unrealized PnL reconciles.
         per_strategy: dict[str, dict[str, float]] = {}
         for symbol, combined_val in combined.items():
-            if combined_val != 0.0:
-                for i, (_, nominal) in enumerate(self._strategies):
-                    weight_i = nominal / total_nominal
-                    carried_val = self._carried[i].get(symbol, 0.0)
-                    frac = weight_i * carried_val / combined_val
-                    if frac != 0.0:
-                        per_strategy.setdefault(self._ids[i], {})[symbol] = frac
-            else:
+            prev_combined = sum(prev_carried[i].get(symbol, 0.0) * w for i, w in enumerate(weights))
+            delta = combined_val - prev_combined
+
+            if combined_val == 0.0:
                 # Full exit: split equally among strategies that were long last bar
                 prev_nonzero = [i for i in range(len(self._strategies))
                                 if prev_carried[i].get(symbol, 0.0) != 0.0]
@@ -128,6 +123,28 @@ class StrategyContainer(StrategySignalGenerator):
                     share = 1.0 / len(prev_nonzero)
                     for i in prev_nonzero:
                         per_strategy.setdefault(self._ids[i], {})[symbol] = share
+            elif delta != 0:
+                # Net entry/increase (delta > 0): attribute to strategies that raised signal.
+                # Net exit/decrease (delta < 0): attribute to strategies that lowered signal.
+                wdeltas = {
+                    i: (self._carried[i].get(symbol, 0.0) - prev_carried[i].get(symbol, 0.0)) * weights[i]
+                    for i in range(len(self._strategies))
+                }
+                if delta > 0:
+                    contributors = {i: d for i, d in wdeltas.items() if d > 0}
+                else:
+                    contributors = {i: -d for i, d in wdeltas.items() if d < 0}
+                total = sum(contributors.values())
+                if total > 0:
+                    for i, d in contributors.items():
+                        per_strategy.setdefault(self._ids[i], {})[symbol] = d / total
+            else:
+                # delta == 0: signal unchanged, but prices may cause rebalancing
+                # fills — use current signal fractions so those fills are attributed
+                for i, weight in enumerate(weights):
+                    frac = weight * self._carried[i].get(symbol, 0.0) / combined_val
+                    if frac != 0.0:
+                        per_strategy.setdefault(self._ids[i], {})[symbol] = frac
 
         self.emit(StrategyBundleEvent(
             timestamp=event.timestamp,

@@ -171,7 +171,8 @@ And create `strategy_params/my_strategy.json`:
 │   └── backtester.py                   # event loop
 ├── strategy_params/
 │   ├── params.json                     # registry: strategy name → Strategy class path
-│   └── sma_10_30.json                  # params for the sma_10_30 strategy instance
+│   ├── sma_10_30.json                  # params for the sma_10_30 strategy instance
+│   └── sma_20_50.json                  # params for the sma_20_50 strategy instance
 ├── strategies/
 │   └── sma_crossover_strategy.py       # SMACrossoverStrategy
 ├── external/

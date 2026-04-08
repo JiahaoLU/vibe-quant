@@ -73,7 +73,7 @@ class DefaultResultWriter(BacktestResultWriter):
             portfolio.strategy_traded_value,
         )
         metrics = self._write_summary_metrics(curve)
-        self._print_summary(metrics, portfolio.strategy_pnl, strategy_metrics)
+        self._print_summary(metrics, strategy_metrics)
 
         self._plot_equity_curve(curve)
         self._plot_drawdown(curve)
@@ -184,8 +184,6 @@ class DefaultResultWriter(BacktestResultWriter):
             turnover = traded / ic / years if ic else float("nan")
 
             final_pnl  = pnl_series[-1] if pnl_series else 0.0
-            total_ret  = final_pnl / ic * 100 if ic else float("nan")
-            cagr       = ((1 + final_pnl / ic) ** (1 / years) - 1) * 100 if ic else float("nan")
 
             peak   = ic
             max_dd = 0.0
@@ -194,8 +192,21 @@ class DefaultResultWriter(BacktestResultWriter):
                 peak = max(peak, eq)
                 max_dd = min(max_dd, (eq - peak) / peak * 100 if peak else 0.0)
 
+            last_row     = curve[-1] if curve else {}
+            unrealized   = (
+                last_row.get("strategy_equity", {}).get(sid, 0.0)
+                - last_row.get("strategy_pnl",   {}).get(sid, 0.0)
+            )
+            total_pnl  = final_pnl + unrealized
+            total_ret  = total_pnl / ic * 100 if ic else float("nan")
+            _ratio     = 1 + total_pnl / ic if ic else 0
+            cagr       = ((_ratio ** (1 / years)) - 1) * 100 if ic and _ratio > 0 else float("nan")
+
             rows.append({
                 "strategy_id":      sid,
+                "realized_pnl":     final_pnl,
+                "unrealized_pnl":   unrealized,
+                "total_pnl":        total_pnl,
                 "total_return_pct": total_ret,
                 "cagr_pct":         cagr,
                 "max_drawdown_pct": max_dd,
@@ -215,7 +226,8 @@ class DefaultResultWriter(BacktestResultWriter):
         total_ret  = (final / ic - 1) * 100
         num_days   = (timestamps[-1] - timestamps[0]).days
         years      = max(num_days / 365.25, 1e-9)
-        cagr       = ((final / ic) ** (1 / years) - 1) * 100
+        _ratio     = final / ic
+        cagr       = ((_ratio ** (1 / years)) - 1) * 100 if _ratio > 0 else float("nan")
 
         peak = ic
         drawdowns = []
@@ -252,7 +264,6 @@ class DefaultResultWriter(BacktestResultWriter):
     def _print_summary(
         self,
         metrics:          dict,
-        strategy_pnl:     list[dict],
         strategy_metrics: list[dict],
     ) -> None:
         ic = metrics["initial_capital"]
@@ -262,13 +273,19 @@ class DefaultResultWriter(BacktestResultWriter):
         print(f"Total return    : {metrics['total_return_pct']:>+.2f}%")
         print(f"Trades (fills)  : {metrics['num_fills']}")
 
-        if strategy_pnl:
-            final_row = strategy_pnl[-1]
-            ids = [k for k in final_row if k != "timestamp"]
-            if ids:
-                print("\nStrategy realized PnL:")
-                for sid in sorted(ids):
-                    print(f"  {sid:<30} ${final_row[sid]:>+10,.2f}")
+        if strategy_metrics:
+            print("\nStrategy PnL (final):")
+            for row in strategy_metrics:
+                sid        = row["strategy_id"]
+                realized   = row["realized_pnl"]
+                unrealized = row["unrealized_pnl"]
+                total      = row["total_pnl"]
+                print(
+                    f"  {sid:<30}"
+                    f"  realized={realized:>+11,.2f}"
+                    f"  unrealized={unrealized:>+11,.2f}"
+                    f"  total={total:>+11,.2f}"
+                )
 
         if strategy_metrics:
             print("\nStrategy metrics (per-fill returns, annualised ×√252):")

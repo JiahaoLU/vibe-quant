@@ -1,0 +1,6 @@
+{
+  "symbols": ["AAPL", "MSFT"],
+  "fast": 20,
+  "slow": 50,
+  "nominal": 1.0
+}
