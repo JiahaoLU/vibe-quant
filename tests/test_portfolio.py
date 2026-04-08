@@ -39,6 +39,21 @@ def _fill_bar(symbol: str, open_price: float, ts=None):
     return BarBundleEvent(timestamp=ts, bars={symbol: tick})
 
 
+def _delisted_bar(symbol: str, open_price: float, ts=None):
+    ts = ts or datetime(2020, 1, 3)
+    tick = TickEvent(
+        symbol=symbol,
+        timestamp=ts,
+        open=open_price,
+        high=open_price,
+        low=open_price,
+        close=open_price,
+        volume=1000.0,
+        is_delisted=True,
+    )
+    return BarBundleEvent(timestamp=ts, bars={symbol: tick})
+
+
 def test_portfolio_constructor_accepts_emit_callable():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
@@ -47,7 +62,13 @@ def test_portfolio_constructor_accepts_emit_callable():
 
 def test_long_signal_emits_buy_order():
     collected = []
-    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+    portfolio = SimplePortfolio(
+        collected.append,
+        _get_bars({"AAPL": 100.0}),
+        ["AAPL"],
+        initial_capital=10_000.0,
+        fill_cost_buffer=0.0,
+    )
 
     portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
     portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
@@ -65,7 +86,13 @@ def test_long_signal_topup_when_partial_holdings():
     """A signal with weight 1.0 tops up to the full target even when already holding."""
     from trading.events import FillEvent as _FE
     collected = []
-    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+    portfolio = SimplePortfolio(
+        collected.append,
+        _get_bars({"AAPL": 100.0}),
+        ["AAPL"],
+        initial_capital=10_000.0,
+        fill_cost_buffer=0.0,
+    )
     # Use commission=0 so cash arithmetic is exact: cash after buy = 10000 − 50*100 = 5000
     portfolio.on_fill(_FE(symbol="AAPL", timestamp=datetime(2020, 1, 2),
                           direction="BUY", quantity=50, fill_price=100.0, commission=0.0))
@@ -470,3 +497,41 @@ def test_fill_pending_orders_populates_bar_fields_on_sell():
     assert order.bar_low == 108.0
     assert order.bar_close == 111.0
     assert order.bar_is_synthetic is True
+
+
+def test_delisted_bar_force_closes_open_position():
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
+    portfolio.fill_pending_orders(_fill_bar("AAPL", 100.0))
+    collected.clear()
+    portfolio.on_fill(_fill("AAPL", "BUY", 100, 100.0))
+
+    portfolio.fill_pending_orders(_delisted_bar("AAPL", 95.0))
+
+    orders = [order for order in collected if isinstance(order, OrderEvent) and order.direction == "SELL"]
+    assert len(orders) == 1
+    assert orders[0].symbol == "AAPL"
+    assert orders[0].quantity == 100
+
+
+def test_delisted_bar_with_no_position_emits_no_sell():
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.fill_pending_orders(_delisted_bar("AAPL", 95.0))
+
+    sell_orders = [order for order in collected if isinstance(order, OrderEvent) and order.direction == "SELL"]
+    assert len(sell_orders) == 0
+
+
+def test_signal_for_delisted_symbol_is_ignored():
+    collected = []
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+
+    portfolio.on_signal(_strategy_bundle("AAPL", 1.0))
+    portfolio.fill_pending_orders(_delisted_bar("AAPL", 100.0))
+
+    buy_orders = [order for order in collected if isinstance(order, OrderEvent) and order.direction == "BUY"]
+    assert len(buy_orders) == 0

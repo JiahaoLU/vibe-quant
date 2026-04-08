@@ -3,9 +3,11 @@ import os
 import queue
 import tempfile
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
+from trading.base.universe_builder import UniverseBuilder
 from trading.impl.multi_csv_data_handler import MultiCSVDataHandler
 from trading.events import BarBundleEvent, EventType
 
@@ -22,6 +24,18 @@ def make_csv(rows: list[dict]) -> str:
     writer.writerows(rows)
     f.close()
     return f.name
+
+
+def _make_universe_builder_csv(active_until: dict[str, datetime]):
+    builder = MagicMock(spec=UniverseBuilder)
+
+    def is_active(symbol, timestamp):
+        if symbol not in active_until:
+            return True
+        return timestamp < active_until[symbol]
+
+    builder.is_active.side_effect = is_active
+    return builder
 
 
 AAPL_ROWS = [
@@ -235,3 +249,58 @@ def test_random_mode_is_reproducible():
 def test_random_mode_raises_without_start_end():
     with pytest.raises(ValueError):
         MultiCSVDataHandler(queue.Queue().put, ["AAPL"])
+
+
+def test_csv_handler_marks_exit_bar_as_delisted():
+    aapl = make_csv(AAPL_ROWS)
+    msft = make_csv(MSFT_ROWS)
+    try:
+        ub = _make_universe_builder_csv({"AAPL": datetime(2020, 1, 3)})
+        collected = []
+        handler = MultiCSVDataHandler(
+            collected.append,
+            ["AAPL", "MSFT"],
+            [aapl, msft],
+            universe_builder=ub,
+        )
+        handler.update_bars()
+        assert collected[0].bars["AAPL"].is_delisted is False
+        handler.update_bars()
+        assert collected[1].bars["AAPL"].is_delisted is True
+    finally:
+        os.unlink(aapl)
+        os.unlink(msft)
+
+
+def test_csv_handler_excludes_symbol_after_exit_bar():
+    aapl = make_csv(AAPL_ROWS)
+    msft = make_csv(MSFT_ROWS)
+    try:
+        ub = _make_universe_builder_csv({"AAPL": datetime(2020, 1, 3)})
+        collected = []
+        handler = MultiCSVDataHandler(
+            collected.append,
+            ["AAPL", "MSFT"],
+            [aapl, msft],
+            universe_builder=ub,
+        )
+        while handler.update_bars():
+            pass
+        assert "AAPL" not in collected[-1].bars
+    finally:
+        os.unlink(aapl)
+        os.unlink(msft)
+
+
+def test_csv_handler_without_universe_builder_unchanged():
+    aapl = make_csv(AAPL_ROWS)
+    msft = make_csv(MSFT_ROWS)
+    try:
+        collected = []
+        handler = MultiCSVDataHandler(collected.append, ["AAPL", "MSFT"], [aapl, msft])
+        while handler.update_bars():
+            pass
+        assert all(not bar.is_delisted for bundle in collected for bar in bundle.bars.values())
+    finally:
+        os.unlink(aapl)
+        os.unlink(msft)

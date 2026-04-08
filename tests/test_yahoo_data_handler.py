@@ -1,11 +1,12 @@
 import queue
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
 from external.yahoo import fetch_daily_bars
+from trading.base.universe_builder import UniverseBuilder
 from trading.impl.yahoo_data_handler import YahooDataHandler
 from trading.events import BarBundleEvent, EventType
 
@@ -84,6 +85,18 @@ def _make_fetch(data: dict[str, list[dict]]):
             result[symbol] = data[symbol]
         return result
     return fetch
+
+
+def _make_universe_builder(active_until: dict[str, datetime]):
+    builder = MagicMock(spec=UniverseBuilder)
+
+    def is_active(symbol, timestamp):
+        if symbol not in active_until:
+            return True
+        return timestamp < active_until[symbol]
+
+    builder.is_active.side_effect = is_active
+    return builder
 
 
 # ---------------------------------------------------------------------------
@@ -174,3 +187,49 @@ def test_handler_raises_on_unknown_symbol():
     fetch = _make_fetch({})  # returns nothing for any symbol
     with pytest.raises(ValueError):
         YahooDataHandler([].append, ["INVALID"], "2020-01-01", "2020-01-05", fetch=fetch)
+
+
+def test_handler_marks_exit_bar_as_delisted():
+    fetch = _make_fetch({"AAPL": AAPL_ROWS, "MSFT": MSFT_ROWS})
+    ub = _make_universe_builder({"AAPL": datetime(2020, 1, 3)})
+    collected = []
+    handler = YahooDataHandler(
+        collected.append,
+        ["AAPL", "MSFT"],
+        "2020-01-01",
+        "2020-01-05",
+        fetch=fetch,
+        universe_builder=ub,
+    )
+
+    handler.update_bars()
+    assert collected[0].bars["AAPL"].is_delisted is False
+
+    handler.update_bars()
+    assert collected[1].bars["AAPL"].is_delisted is True
+
+
+def test_handler_excludes_symbol_after_exit_bar():
+    fetch = _make_fetch({"AAPL": AAPL_ROWS, "MSFT": MSFT_ROWS})
+    ub = _make_universe_builder({"AAPL": datetime(2020, 1, 3)})
+    collected = []
+    handler = YahooDataHandler(
+        collected.append,
+        ["AAPL", "MSFT"],
+        "2020-01-01",
+        "2020-01-05",
+        fetch=fetch,
+        universe_builder=ub,
+    )
+    while handler.update_bars():
+        pass
+    assert "AAPL" not in collected[-1].bars
+
+
+def test_handler_without_universe_builder_unchanged():
+    fetch = _make_fetch({"AAPL": AAPL_ROWS, "MSFT": MSFT_ROWS})
+    collected = []
+    handler = YahooDataHandler(collected.append, ["AAPL", "MSFT"], "2020-01-01", "2020-01-05", fetch=fetch)
+    while handler.update_bars():
+        pass
+    assert all(not bar.is_delisted for bundle in collected for bar in bundle.bars.values())

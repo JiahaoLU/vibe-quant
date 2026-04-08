@@ -94,3 +94,32 @@ def test_order_event_bar_is_synthetic_true_round_trips():
         reference_price=100.0, bar_is_synthetic=True,
     )
     assert order.bar_is_synthetic is True
+
+
+def test_tick_event_is_delisted_defaults_to_false():
+    ts = datetime(2020, 1, 2)
+    bar = TickEvent(
+        symbol="AAPL",
+        timestamp=ts,
+        open=100.0,
+        high=101.0,
+        low=99.0,
+        close=100.5,
+        volume=1000.0,
+    )
+    assert bar.is_delisted is False
+
+
+def test_tick_event_is_delisted_can_be_set_true():
+    ts = datetime(2020, 1, 2)
+    bar = TickEvent(
+        symbol="ENRN",
+        timestamp=ts,
+        open=1.0,
+        high=1.0,
+        low=0.5,
+        close=0.8,
+        volume=500.0,
+        is_delisted=True,
+    )
+    assert bar.is_delisted is True

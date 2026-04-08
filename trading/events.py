@@ -26,6 +26,7 @@ class TickEvent:                 # value type — not an Event subclass, not que
     close:        float
     volume:       float
     is_synthetic: bool = False   # True when bar is carry-forwarded (no real data at this timestamp)
+    is_delisted:  bool = False   # True on the last bar before the symbol exits the universe
 
 
 @dataclass

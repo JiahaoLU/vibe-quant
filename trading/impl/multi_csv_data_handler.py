@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Callable
 
 from ..base.data import DataHandler
+from ..base.universe_builder import UniverseBuilder
 from ..events import BarBundleEvent, Event, TickEvent
 
 
@@ -33,6 +34,7 @@ class MultiCSVDataHandler(DataHandler):
         end:         str | None = None,
         max_history: int = 200,
         date_format: str = "%Y-%m-%d",
+        universe_builder: UniverseBuilder | None = None,
     ):
         if csv_paths is None and (start is None or end is None):
             raise ValueError(
@@ -60,6 +62,7 @@ class MultiCSVDataHandler(DataHandler):
         timeline = sorted(all_ts)
 
         last_real: dict[str, TickEvent | None] = {s: None for s in symbols}
+        was_active: dict[str, bool] = {s: True for s in symbols}
         self._merged: list[tuple[datetime, dict[str, TickEvent]]] = []
         for ts in timeline:
             bundle: dict[str, TickEvent] = {}
@@ -67,20 +70,40 @@ class MultiCSVDataHandler(DataHandler):
                 if ts in raw[symbol]:
                     bar = raw[symbol][ts]
                     last_real[symbol] = bar
-                    bundle[symbol] = bar
                 elif last_real[symbol] is not None:
                     prev = last_real[symbol]
-                    bundle[symbol] = TickEvent(
+                    bar = TickEvent(
                         symbol=symbol, timestamp=ts,
                         open=prev.close, high=prev.close, low=prev.close, close=prev.close,
                         volume=0.0, is_synthetic=True,
                     )
                 else:
-                    bundle[symbol] = TickEvent(
+                    bar = TickEvent(
                         symbol=symbol, timestamp=ts,
                         open=0.0, high=0.0, low=0.0, close=0.0,
                         volume=0.0, is_synthetic=True,
                     )
+
+                if universe_builder is not None:
+                    is_now_active = universe_builder.is_active(symbol, ts)
+                    if not is_now_active and was_active[symbol]:
+                        bar = TickEvent(
+                            symbol=bar.symbol,
+                            timestamp=bar.timestamp,
+                            open=bar.open,
+                            high=bar.high,
+                            low=bar.low,
+                            close=bar.close,
+                            volume=bar.volume,
+                            is_synthetic=bar.is_synthetic,
+                            is_delisted=True,
+                        )
+                    elif not is_now_active:
+                        was_active[symbol] = False
+                        continue
+                    was_active[symbol] = is_now_active
+
+                bundle[symbol] = bar
             self._merged.append((ts, bundle))
 
         self._index = 0

@@ -5,6 +5,7 @@ from .result_writer import BacktestResultWriter
 from .strategy      import Strategy, StrategyBase, StrategySignalGenerator
 from .strategy_params import StrategyParams
 from .strategy_params_loader import StrategyParamsLoader
+from .universe_builder import UniverseBuilder
 
 __all__ = [
     "BacktestResultWriter",
@@ -16,4 +17,5 @@ __all__ = [
     "StrategySignalGenerator",
     "StrategyParams",
     "StrategyParamsLoader",
+    "UniverseBuilder",
 ]

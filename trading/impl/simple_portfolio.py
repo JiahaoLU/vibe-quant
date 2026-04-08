@@ -43,13 +43,20 @@ class SimplePortfolio(Portfolio):
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
         pending = self._pending_signals
         self._pending_signals = None
+        emitted_any = False
+
+        for symbol, bar in bar_bundle.bars.items():
+            if bar.is_delisted and self._holdings.get(symbol, 0) != 0:
+                self._emit_order(symbol, bar_bundle.timestamp, "SELL", abs(self._holdings[symbol]), bar)
+                emitted_any = True
+
         if not pending:
             self._current_attribution = {}
-            self._emit_order("", bar_bundle.timestamp, "HOLD", 0)
+            if not emitted_any:
+                self._emit_order("", bar_bundle.timestamp, "HOLD", 0)
             return
 
         self._current_attribution = pending.per_strategy
-        emitted_any = False
 
         # Compute current holdings market value for leverage check
         holdings_value = sum(
@@ -62,11 +69,11 @@ class SimplePortfolio(Portfolio):
 
         available_cash = self._cash
         for symbol, signal_event in pending.combined.items():
+            bar = bar_bundle.bars.get(symbol)
+            if bar is None or bar.is_delisted:
+                continue
             # No shorts: clamp negative signals to zero
             weight = max(0.0, signal_event.signal)
-            bar = bar_bundle.bars.get(symbol)
-            if bar is None:
-                continue
             price = bar.open
             if price <= 0:
                 continue

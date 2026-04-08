@@ -8,9 +8,11 @@ strategy_params/params.json.
 import queue
 
 from analysis.result_writer import DefaultResultWriter
+from external.index_constituents import load_or_fetch_universe_manifest
 from external.yahoo import fetch_daily_bars
 from trading.backtester import Backtester
 from trading.impl import (
+    IndexConstituentsUniverseBuilder,
     JsonStrategyParamsLoader,
     SimulatedExecutionHandler,
     SimplePortfolio,
@@ -19,17 +21,21 @@ from trading.impl import (
 )
 
 # --- Configuration -----------------------------------------------------------
-START              = "2020-01-01"
-END                = "2022-01-01"
+START               = "2020-01-01"
+END                 = "2022-01-01"
 STRATEGY_PARAMS_DIR = "strategy_params"
-INITIAL_CAPITAL    = 10_000.0
-COMMISSION_PCT     = 0.001  # 0.1% of trade value per fill
-SLIPPAGE_PCT       = 0.0005 # fixed spread floor (one-way minimum cost)
-MARKET_IMPACT_ETA  = 0.1    # square-root impact coefficient (Almgren et al.)
-MAX_LEVERAGE       = 1.0    # max gross exposure as a multiple of current equity
-FILL_COST_BUFFER   = 0.002  # cash reserve fraction for slippage + commission on buys
-RESULTS_DIR        = "results"
-RESULTS_FORMAT     = "parquet"  # "parquet" or "csv"
+INITIAL_CAPITAL     = 10_000.0
+COMMISSION_PCT      = 0.001  # 0.1% of trade value per fill
+SLIPPAGE_PCT        = 0.0005 # fixed spread floor (one-way minimum cost)
+MARKET_IMPACT_ETA   = 0.1    # square-root impact coefficient (Almgren et al.)
+MAX_LEVERAGE        = 1.0    # max gross exposure as a multiple of current equity
+FILL_COST_BUFFER    = 0.002  # cash reserve fraction for slippage + commission on buys
+RESULTS_DIR         = "results"
+RESULTS_FORMAT      = "parquet"  # "parquet" or "csv"
+USE_UNIVERSE_GATING = True
+UNIVERSE_MANIFEST_FILE = "data/universe_manifest.csv"
+INDEX_CODE          = "sp500"
+RELOAD_UNIVERSE     = False
 # -----------------------------------------------------------------------------
 
 events   = queue.Queue()
@@ -40,8 +46,26 @@ strategy = StrategyContainer(events.put, lambda s, n: data.get_latest_bars(s, n)
 for strategy_cls, params in loader.load_all():
     strategy.add(strategy_cls, params)
 
-symbols   = strategy.symbols
-data      = YahooDataHandler(events.put, symbols, start=START, end=END, fetch=fetch_daily_bars)
+symbols = strategy.symbols
+universe_builder = None
+if USE_UNIVERSE_GATING:
+    manifest_path = load_or_fetch_universe_manifest(
+        INDEX_CODE,
+        START,
+        END,
+        output_path=UNIVERSE_MANIFEST_FILE,
+        reload=RELOAD_UNIVERSE,
+    )
+    universe_builder = IndexConstituentsUniverseBuilder(manifest_path)
+
+data = YahooDataHandler(
+    events.put,
+    symbols,
+    start=START,
+    end=END,
+    fetch=fetch_daily_bars,
+    universe_builder=universe_builder,
+)
 portfolio = SimplePortfolio(
     events.put, data.get_latest_bars, symbols,
     initial_capital  = INITIAL_CAPITAL,

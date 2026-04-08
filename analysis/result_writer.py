@@ -367,8 +367,8 @@ class DefaultResultWriter(BacktestResultWriter):
             ax.plot(sym_dates, sym_closes, color=color, linewidth=1, label=f"{symbol} close")
 
             price_by_date = dict(zip(sym_dates, sym_closes))
-            buy_dates, buy_prices   = [], []
-            sell_dates, sell_prices = [], []
+            buy_dates,  buy_prices,  buy_qtys  = [], [], []
+            sell_dates, sell_prices, sell_qtys = [], [], []
 
             for i, (d, h) in enumerate(zip(fill_dates, holdings_ls)):
                 prev_h   = holdings_ls[i - 1] if i > 0 else {}
@@ -378,16 +378,16 @@ class DefaultResultWriter(BacktestResultWriter):
                 if price is None:
                     continue
                 if prev_qty == 0 and cur_qty > 0:
-                    buy_dates.append(d);  buy_prices.append(price)
+                    buy_dates.append(d);  buy_prices.append(price);  buy_qtys.append(cur_qty)
                 elif prev_qty > 0 and cur_qty == 0:
-                    sell_dates.append(d); sell_prices.append(price)
+                    sell_dates.append(d); sell_prices.append(price); sell_qtys.append(prev_qty)
 
             if buy_dates:
-                ax.scatter(buy_dates,  buy_prices,  marker="^", color="green", s=80,
-                           zorder=5, label=f"{symbol} buy")
+                ax.scatter(buy_dates,  buy_prices,  marker="^", color="green",
+                           s=_qty_to_size(buy_qtys),  zorder=5, label=f"{symbol} buy")
             if sell_dates:
-                ax.scatter(sell_dates, sell_prices, marker="v", color="red",   s=80,
-                           zorder=5, label=f"{symbol} sell")
+                ax.scatter(sell_dates, sell_prices, marker="v", color="red",
+                           s=_qty_to_size(sell_qtys), zorder=5, label=f"{symbol} sell")
             total_buys  += len(buy_dates)
             total_sells += len(sell_dates)
 
@@ -445,6 +445,14 @@ class DefaultResultWriter(BacktestResultWriter):
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+def _qty_to_size(qtys: list[int], lo: float = 40, hi: float = 220) -> list[float]:
+    """Map trade quantities to scatter marker sizes in [lo, hi]."""
+    max_q = max(qtys)
+    if max_q == 0:
+        return [lo] * len(qtys)
+    return [lo + (hi - lo) * q / max_q for q in qtys]
+
 
 def _fmt_x(ax) -> None:
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
