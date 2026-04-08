@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Callable
 
 from ..base.portfolio import Portfolio
@@ -38,11 +39,15 @@ class SimplePortfolio(Portfolio):
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
         pending = self._pending_signals
         self._pending_signals = None
-        self._current_attribution = pending.per_strategy if pending is not None else {}
+        if not pending:
+            self._current_attribution = {}
+            self._emit_order("", bar_bundle.timestamp, "HOLD", 0)
+            return
 
+        self._current_attribution = pending.per_strategy
         emitted_any = False
         available_cash = self._cash
-        for symbol, signal_event in (pending.combined.items() if pending is not None else []):
+        for symbol, signal_event in pending.combined.items():
             # No shorts: clamp negative signals to zero
             weight = max(0.0, signal_event.signal)
             bar = bar_bundle.bars.get(symbol)
@@ -58,45 +63,31 @@ class SimplePortfolio(Portfolio):
 
             if delta > 0 and available_cash >= delta * price:
                 available_cash -= delta * price
-                self._emit(OrderEvent(
-                    symbol           = symbol,
-                    timestamp        = bar_bundle.timestamp,
-                    order_type       = "MARKET",
-                    direction        = "BUY",
-                    quantity         = delta,
-                    reference_price  = price,
-                    bar_volume       = bar.volume,
-                    bar_high         = bar.high,
-                    bar_low          = bar.low,
-                    bar_close        = bar.close,
-                    bar_is_synthetic = bar.is_synthetic,
-                ))
+                self._emit_order(symbol, bar_bundle.timestamp, "BUY", delta, bar)
                 emitted_any = True
             elif delta < 0:
-                self._emit(OrderEvent(
-                    symbol           = symbol,
-                    timestamp        = bar_bundle.timestamp,
-                    order_type       = "MARKET",
-                    direction        = "SELL",
-                    quantity         = abs(delta),
-                    reference_price  = price,
-                    bar_volume       = bar.volume,
-                    bar_high         = bar.high,
-                    bar_low          = bar.low,
-                    bar_close        = bar.close,
-                    bar_is_synthetic = bar.is_synthetic,
-                ))
+                self._emit_order(symbol, bar_bundle.timestamp, "SELL", abs(delta), bar)
                 emitted_any = True
 
         if not emitted_any:
-            self._emit(OrderEvent(
-                symbol          = "",
-                timestamp       = bar_bundle.timestamp,
-                order_type      = "MARKET",
-                direction       = "HOLD",
-                quantity        = 0,
-                reference_price = 0.0,
-            ))
+            self._emit_order("", bar_bundle.timestamp, "HOLD", 0)
+
+    def _emit_order(self, symbol: str, timestamp: datetime, direction: str, qty: int, bar: TickEvent | None) -> None:
+        order = OrderEvent(
+            symbol=symbol,
+            timestamp=timestamp,
+            order_type="MARKET",
+            direction=direction,
+            quantity=qty,
+        )
+        if bar:
+            order.reference_price  = bar.open
+            order.bar_volume       = bar.volume
+            order.bar_high         = bar.high
+            order.bar_low          = bar.low
+            order.bar_close        = bar.close
+            order.bar_is_synthetic = bar.is_synthetic
+        self._emit(order)
 
     def on_signal(self, event: StrategyBundleEvent) -> None:
         self._pending_signals = event
@@ -113,29 +104,33 @@ class SimplePortfolio(Portfolio):
             trade_value = event.fill_price * event.quantity
             for strategy_id, symbol_weights in self._current_attribution.items():
                 share = symbol_weights.get(event.symbol, 0.0)
-                if share:
-                    self._strategy_realized_pnl[strategy_id] = (
-                        self._strategy_realized_pnl.get(strategy_id, 0.0) - share * fill_cash_impact
-                    )
-                    self._strategy_traded_value[strategy_id] = (
-                        self._strategy_traded_value.get(strategy_id, 0.0) + share * trade_value
-                    )
-                    sym_qty = self._strategy_qty.setdefault(strategy_id, {})
-                    sym_qty[event.symbol] = sym_qty.get(event.symbol, 0.0) + multiplier * share * event.quantity
+                if not share:
+                    continue
+                
+                self._strategy_realized_pnl[strategy_id] = (
+                    self._strategy_realized_pnl.get(strategy_id, 0.0) - share * fill_cash_impact
+                )
+                self._strategy_traded_value[strategy_id] = (
+                    self._strategy_traded_value.get(strategy_id, 0.0) + share * trade_value
+                )
+                sym_qty = self._strategy_qty.setdefault(strategy_id, {})
+                sym_qty[event.symbol] = sym_qty.get(event.symbol, 0.0) + multiplier * share * event.quantity
 
         market_value = 0.0
         strategy_market_value: dict[str, float] = {}
         for symbol in self._symbols:
             bars = self._get_bars(symbol, 1)
-            if bars:
-                price = bars[-1].close
-                qty   = self._holdings.get(symbol, 0)
-                market_value += qty * price
-                for sid, sym_qty in self._strategy_qty.items():
-                    strategy_market_value[sid] = (
-                        strategy_market_value.get(sid, 0.0)
-                        + sym_qty.get(symbol, 0.0) * price
-                    )
+            if not bars:
+                continue
+
+            price = bars[-1].close
+            qty   = self._holdings.get(symbol, 0)
+            market_value += qty * price
+            for sid, sym_qty in self._strategy_qty.items():
+                strategy_market_value[sid] = (
+                    strategy_market_value.get(sid, 0.0)
+                    + sym_qty.get(symbol, 0.0) * price
+                )
 
         self._equity_curve.append({
             "timestamp":      event.timestamp,

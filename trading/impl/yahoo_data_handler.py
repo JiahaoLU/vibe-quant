@@ -38,6 +38,8 @@ class YahooDataHandler(DataHandler):
 
         all_rows = fetch(symbols, start, end)
         raw: dict[str, dict[datetime, TickEvent]] = {}
+        all_ts: set[datetime] = set()
+
         for symbol, rows in all_rows.items():
             raw[symbol] = {
                 row["timestamp"]: TickEvent(
@@ -51,10 +53,8 @@ class YahooDataHandler(DataHandler):
                 )
                 for row in rows
             }
+            all_ts.update(raw[symbol].keys())
 
-        all_ts: set[datetime] = set()
-        for data in raw.values():
-            all_ts.update(data.keys())
         timeline = sorted(all_ts)
 
         last_real: dict[str, TickEvent | None] = {s: None for s in symbols}

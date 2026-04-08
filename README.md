@@ -169,10 +169,10 @@ strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20, nominal=
 │   ├── AAPL.csv
 │   └── MSFT.csv
 ├── results/
-│   └── equity_curve.csv
+│   └── ...                             # equity_curve, summary_metrics, strategy_pnl, strategy_metrics (csv/parquet + jpg charts)
 ├── tests/
 ├── run_backtest.py                      # entry point + configuration
-├── plot_results.ipynb                   # equity curve, drawdown, trade markers
+├── plot_results.ipynb                   # equity curve, drawdown, trades, per-strategy metrics & PnL
 └── requirements.txt
 ```
 
@@ -186,7 +186,7 @@ Python 3.10+ (uses `match` statement).
 | `matplotlib>=3.7` | `plot_results.ipynb` — equity curve, drawdown, trade markers |
 | `ipykernel` | Registers the venv as a Jupyter kernel (`vibe-quant`) |
 | `pytest>=7.0` | Test suite (`tests/`) |
-| `pandas>=2.0` | Optional — cleaner post-run analysis (not used yet) |
+| `pandas>=2.0` | `plot_results.ipynb` — loads result files for display |
 
 Install: `pip install -r requirements.txt`
 
@@ -194,4 +194,3 @@ Install: `pip install -r requirements.txt`
 
 - **RiskManager** — insert between Portfolio and Execution to enforce max drawdown / position limits
 - **Live trading** — replace `YahooDataHandler` with a streaming data source; replace `SimulatedExecutionHandler` with a broker API client
-- **PerformanceAnalyzer** — consume the equity curve to compute Sharpe ratio, max drawdown, CAGR

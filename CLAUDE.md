@@ -11,7 +11,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m ipykernel install --user --name=claude-learn
-python run_backtest.py            # run backtest, write results/equity_curve.csv
+python run_backtest.py            # run backtest, write results/ (equity_curve, summary_metrics, strategy_pnl, strategy_metrics)
 jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 ```
 
@@ -68,7 +68,7 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 | `trading/impl/` | Concrete implementations — always import their ABC from `trading/base/`. |
 | `trading/impl/data.py` | `get_latest_bars` deque is load-bearing — strategies depend on it for indicator history. |
 | `run_backtest.py` | Wiring point. All configuration constants live here. |
-| `plot_results.ipynb` | Visualization only — reads CSVs from `data/` and `results/`, never imports `trading/`. |
+| `plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |
 
 ## CSV data format
 
