@@ -91,8 +91,9 @@ def restore(self, holdings: dict[str, int], cash: float) -> None:
 
 **`LiveRunner`** — `async def run() -> None`. Constructor: `(events, data, strategy, portfolio, execution: LiveExecutionHandler, reconciler)`.
 
-**`RiskGuard`** — `def check(event: StrategyBundleEvent, current_prices: dict[str, float]) -> StrategyBundleEvent | None`  
-Returns the event unchanged if within limits, `None` if halted, or a modified event with clamped signals. `current_prices` is provided by the portfolio at call time from its own `get_bars`.
+**`RiskGuard`** — two methods:
+- `def check(event: StrategyBundleEvent, current_prices: dict[str, float], current_equity: float) -> StrategyBundleEvent | None` — returns event unchanged, modified (clamped signals), or `None` if halted
+- `def reset_day(self, current_equity: float) -> None` — snapshots day-open equity; called by `LiveRunner` at each session open
 
 **`PositionReconciler`** — `async def hydrate(portfolio: Portfolio) -> None`  
 Queries broker state and calls `portfolio.restore(...)`.
@@ -152,14 +153,14 @@ Called once at `LiveRunner` startup before the first bar.
 
 Constructor params: `max_daily_loss_pct: float`, `max_position_pct: float`.
 
-`check(event: StrategyBundleEvent, current_prices: dict[str, float]) -> StrategyBundleEvent | None`:
-- **Daily loss limit**: if current equity < day-open equity × (1 - max_daily_loss_pct), return `None` and log warning.
-- **Per-symbol cap**: for each signal in the bundle, if `signal × initial_capital / price > max_position_pct × current_equity`, clamp the signal weight to the cap. `price` comes from `current_prices`.
-- Returns (possibly modified) event, or `None` if trading is halted.
+`check(event, current_prices: dict[str, float], current_equity: float) -> StrategyBundleEvent | None`:
+- **Daily loss limit**: if `current_equity < _day_open_equity × (1 - max_daily_loss_pct)`, return `None` and log warning.
+- **Per-symbol cap**: for each signal, clamp weight so `signal × initial_capital / price ≤ max_position_pct × current_equity`. `price` comes from `current_prices`.
+- Returns (possibly modified) event, or `None` if halted.
 
-`RiskGuard` constructor params: `max_daily_loss_pct: float`, `max_position_pct: float`, `get_equity: Callable[[], float]`, `get_day_open_equity: Callable[[], float]`.
+`RiskGuard` constructor params: `max_daily_loss_pct: float`, `max_position_pct: float`, `initial_capital: float`.
 
-`current_prices` is assembled by the portfolio in `on_signal()` from its own `self._get_bars` and passed to `check()` — no price access needed in `RiskGuard` itself.
+`_day_open_equity` is set via `reset_day(current_equity)` — called by `LiveRunner` at each session open. Portfolio computes `current_equity` as `self._cash + market_value` before calling `check()`.
 
 ---
 
