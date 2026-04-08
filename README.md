@@ -68,15 +68,17 @@ Equity curve    : results/equity_curve.csv
 Edit the constants at the top of `run_backtest.py`:
 
 ```python
-SYMBOLS         = ["AAPL", "MSFT"]   # symbols to fetch and trade
-START           = "2020-01-01"        # backtest start date (Yahoo data)
-END             = "2022-01-01"        # backtest end date
-INITIAL_CAPITAL = 10_000.0
-FAST_WINDOW     = 10      # SMA crossover fast period
-SLOW_WINDOW     = 30      # SMA crossover slow period
-COMMISSION      = 1.0     # dollars per fill
-SLIPPAGE_PCT    = 0.0005  # 0.05% per fill
+START              = "2020-01-01"      # backtest start date (Yahoo data)
+END                = "2022-01-01"      # backtest end date
+INITIAL_CAPITAL    = 10_000.0          # starting portfolio cash
+COMMISSION_PCT     = 0.001             # 0.1% of trade value per fill
+SLIPPAGE_PCT       = 0.0005            # fixed spread floor (one-way minimum cost)
+MARKET_IMPACT_ETA  = 0.1               # square-root impact coefficient
+RESULTS_DIR        = "results"         # output directory for backtest artifacts
+RESULTS_FORMAT     = "parquet"         # "parquet" or "csv"
 ```
+
+Strategy-specific parameters (symbols, windows, etc.) live in `strategy_params/<strategy_name>.json`. Strategies are registered in `strategy_params/params.json`.
 
 ## CSV format
 
@@ -103,7 +105,6 @@ from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent
 
 @dataclass
 class MyStrategyParams(StrategyParams):
-    symbols:  list[str]
     lookback: int   = 20
     nominal:  float = 5_000.0   # cash this strategy controls
 
@@ -135,11 +136,16 @@ class MyStrategy(Strategy):
 
 `signal` is a float target weight: `> 0` = long, `0` = exit, `< 0` = short (blocked by portfolio). Weights across one bundle should sum to ≤ 1 so the strategy never over-allocates its nominal.
 
-Then register it in `run_backtest.py`:
+Then register it in `strategy_params/params.json`:
 
-```python
-from strategies.my_strategy import MyStrategy, MyStrategyParams
-strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20, nominal=5_000.0))
+```json
+{ "my_strategy": "strategies.my_strategy.MyStrategy" }
+```
+
+And create `strategy_params/my_strategy.json`:
+
+```json
+{ "symbols": ["AAPL", "MSFT"], "lookback": 20, "nominal": 5000.0 }
 ```
 
 ## Project structure
@@ -151,9 +157,11 @@ strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20, nominal=
 │   │   ├── data.py                     # DataHandler ABC
 │   │   ├── strategy.py                 # StrategyBase, StrategySignalGenerator, Strategy ABCs
 │   │   ├── strategy_params.py          # StrategyParams base dataclass
+│   │   ├── strategy_params_loader.py   # StrategyParamsLoader ABC
 │   │   ├── portfolio.py                # Portfolio ABC
 │   │   └── execution.py               # ExecutionHandler ABC
 │   ├── impl/
+│   │   ├── json_strategy_params_loader.py  # registry-based JSON loader
 │   │   ├── multi_csv_data_handler.py   # CSV-backed data handler
 │   │   ├── yahoo_data_handler.py       # Yahoo Finance data handler
 │   │   ├── strategy_container.py       # Holds + dispatches to strategies
@@ -161,6 +169,9 @@ strategy.add(MyStrategy, MyStrategyParams(symbols=SYMBOLS, lookback=20, nominal=
 │   │   └── simulated_execution_handler.py
 │   ├── events.py                       # all event dataclasses + EventType enum
 │   └── backtester.py                   # event loop
+├── strategy_params/
+│   ├── params.json                     # registry: strategy name → Strategy class path
+│   └── sma_10_30.json                  # params for the sma_10_30 strategy instance
 ├── strategies/
 │   └── sma_crossover_strategy.py       # SMACrossoverStrategy
 ├── external/

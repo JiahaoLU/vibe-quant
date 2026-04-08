@@ -8,7 +8,6 @@ from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent
 
 @dataclass
 class SMACrossoverStrategyParams(StrategyParams):
-    symbols: list[str]
     fast:    int = 10
     slow:    int = 30
 

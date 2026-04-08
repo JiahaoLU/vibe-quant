@@ -27,7 +27,7 @@ def test_strategy_abc_exposes_get_bars():
         def calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None:
             return None
 
-    stub = _Stub(get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"]))
+    stub = _Stub(get_bars=lambda s, n: [tick], strategy_params=StrategyParams(symbols=["AAPL"], name="stub"))
     assert stub.get_bars("AAPL", 1) == [tick]
 
 
@@ -37,7 +37,7 @@ def test_on_get_signal_default_is_noop():
         def _init(self, strategy_params): pass
         def calculate_signals(self, event): return None
 
-    stub = _Stub(get_bars=lambda s, n: [], strategy_params=StrategyParams(symbols=["AAPL"]))
+    stub = _Stub(get_bars=lambda s, n: [], strategy_params=StrategyParams(symbols=["AAPL"], name="stub"))
     stub.on_get_signal(None)   # must not raise
     ts = datetime(2020, 1, 2)
     sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)
@@ -49,7 +49,7 @@ def test_no_signal_before_enough_history():
     bars = _bars([100.0] * 5)
     strategy = SMACrossoverStrategy(
         get_bars=lambda s, n: bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], name="test_sma", fast=10, slow=30),
     )
     result = strategy.calculate_signals(_bundle(["AAPL"]))
     assert result is None
@@ -59,7 +59,7 @@ def test_long_signal_when_fast_above_slow():
     bars = _bars([90.0] * 20 + [110.0] * 10)
     strategy = SMACrossoverStrategy(
         get_bars=lambda s, n: bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], name="test_sma", fast=10, slow=30),
     )
     result = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
     assert result is not None
@@ -71,7 +71,7 @@ def test_no_duplicate_long_signal():
     bars = _bars([90.0] * 20 + [110.0] * 10)
     strategy = SMACrossoverStrategy(
         get_bars=lambda s, n: bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], name="test_sma", fast=10, slow=30),
     )
     result1 = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
     assert result1 is not None
@@ -83,7 +83,7 @@ def test_exit_signal_when_fast_below_slow():
     current_bars = _bars([90.0] * 20 + [110.0] * 10)
     strategy = SMACrossoverStrategy(
         get_bars=lambda s, n: current_bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], name="test_sma", fast=10, slow=30),
     )
     result1 = strategy.calculate_signals(_bundle(["AAPL"], close=110.0))
     assert result1 is not None
@@ -99,7 +99,7 @@ def test_no_signal_when_flat():
     bars = _bars([100.0] * 30)
     strategy = SMACrossoverStrategy(
         get_bars=lambda s, n: bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL"], name="test_sma", fast=10, slow=30),
     )
     result = strategy.calculate_signals(_bundle(["AAPL"]))
     assert result is None
@@ -113,7 +113,7 @@ def test_multi_symbol_signals_are_independent():
 
     strategy = SMACrossoverStrategy(
         get_bars=get_bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], name="test_sma", fast=10, slow=30),
     )
     result = strategy.calculate_signals(_bundle(["AAPL", "MSFT"]))
     assert result is not None
@@ -125,7 +125,7 @@ def test_no_emission_when_no_symbol_signals():
     bars = _bars([100.0] * 30)
     strategy = SMACrossoverStrategy(
         get_bars=lambda s, n: bars,
-        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], fast=10, slow=30),
+        strategy_params=SMACrossoverStrategyParams(symbols=["AAPL", "MSFT"], name="test_sma", fast=10, slow=30),
     )
     result = strategy.calculate_signals(_bundle(["AAPL", "MSFT"]))
     assert result is None
@@ -144,4 +144,4 @@ def test_strategy_is_abstract():
         pass
 
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        _NoImpl(get_bars=lambda s, n: [], strategy_params=StrategyParams(symbols=[]))
+        _NoImpl(get_bars=lambda s, n: [], strategy_params=StrategyParams(symbols=[], name="abstract"))

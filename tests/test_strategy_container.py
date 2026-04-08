@@ -56,7 +56,7 @@ def test_on_get_signal_called_even_when_calculate_signals_returns_none():
         def on_get_signal(self, result): hook_calls.append(result)
 
     container = StrategyContainer(emit=lambda e: None, get_bars=lambda s, n: [])
-    container.add(_TrackHook, StrategyParams(symbols=["AAPL"]))
+    container.add(_TrackHook, StrategyParams(symbols=["AAPL"], name="track_hook"))
     container.get_signals(_bundle(["AAPL"]))
     assert hook_calls == [None]
 
@@ -76,7 +76,7 @@ def test_on_get_signal_called_with_bundle_when_signals_fire():
         def on_get_signal(self, result): hook_calls.append(result)
 
     container = StrategyContainer(emit=lambda e: None, get_bars=lambda s, n: [])
-    container.add(_TrackHook, StrategyParams(symbols=["AAPL"]))
+    container.add(_TrackHook, StrategyParams(symbols=["AAPL"], name="track_hook"))
     container.get_signals(_bundle(["AAPL"]))
     assert len(hook_calls) == 1
     assert isinstance(hook_calls[0], SignalBundleEvent)
@@ -86,7 +86,7 @@ def test_add_factory_emits_one_combined_bundle():
     """Container aggregates strategy results and emits exactly one StrategyBundleEvent."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="always_long"))
     container.get_signals(_bundle(["AAPL"]))
     assert len(collected) == 1
     assert isinstance(collected[0], StrategyBundleEvent)
@@ -100,7 +100,7 @@ def test_add_factory_respects_overridden_get_bars():
         emit=lambda e: None,
         get_bars=lambda s, n: default_calls.append(s) or [],
     )
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]), get_bars=lambda s, n: custom_calls.append(s) or [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="always_long"), get_bars=lambda s, n: custom_calls.append(s) or [])
     container.get_signals(_bundle(["AAPL"]))
     assert "AAPL" in custom_calls
     assert default_calls == []
@@ -111,7 +111,7 @@ def test_add_strategy_accepts_prebuilt_instance():
     container_emit = []
     strategy = _AlwaysLong(
         get_bars=lambda s, n: [],
-        strategy_params=StrategyParams(symbols=["AAPL"]),
+        strategy_params=StrategyParams(symbols=["AAPL"], name="prebuilt"),
     )
     container = StrategyContainer(emit=container_emit.append, get_bars=lambda s, n: [])
     container.add_strategy(strategy)
@@ -124,8 +124,8 @@ def test_get_signals_combines_independent_symbol_strategies():
     """Two strategies for different symbols produce one combined bundle covering both."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
-    container.add(_AlwaysLong, StrategyParams(symbols=["MSFT"]))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="aapl"))
+    container.add(_AlwaysLong, StrategyParams(symbols=["MSFT"], name="msft"))
     container.get_signals(_bundle(["AAPL", "MSFT"]))
     assert len(collected) == 1
     bundle = collected[0]
@@ -137,7 +137,7 @@ def test_strategy_returning_none_emits_nothing():
     """A container of only None-returning strategies emits nothing."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_NeverSignals, StrategyParams(symbols=[]))
+    container.add(_NeverSignals, StrategyParams(symbols=[], name="never"))
     container.get_signals(_bundle(["AAPL"]))
     assert collected == []
 
@@ -156,8 +156,8 @@ def test_two_strategies_same_symbol_weighted_by_nominal():
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
     # Strategy A: nominal 3, signal 1.0 → contribution 3/5 * 1.0 = 0.6
     # Strategy B: nominal 2, signal 1.0 → contribution 2/5 * 1.0 = 0.4
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=3.0))
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=2.0))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="long_a", nominal=3.0))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="long_b", nominal=2.0))
     container.get_signals(_bundle(["AAPL"]))
     assert len(collected) == 1
     combined_signal = collected[0].combined["AAPL"].signal
@@ -168,8 +168,8 @@ def test_carry_forward_applies_when_one_strategy_silent():
     """If strategy B fired last bar but not this bar, its last signal still contributes."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], nominal=1.0))
-    container.add(_NeverSignals, StrategyParams(symbols=[], nominal=1.0))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="long_a", nominal=1.0))
+    container.add(_NeverSignals, StrategyParams(symbols=[], name="never", nominal=1.0))
 
     # Bar 1: only _AlwaysLong fires
     container.get_signals(_bundle(["AAPL"]))
@@ -207,17 +207,19 @@ def test_nominal_weights_combined_signal():
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
     # nominal 1 with signal 0.5, nominal 1 with signal 1.0 → weighted avg = 0.75
-    container.add(_HalfSignal, StrategyParams(symbols=["AAPL"], nominal=1.0))
-    container.add(_FullSignal, StrategyParams(symbols=["AAPL"], nominal=1.0))
+    container.add(_HalfSignal, StrategyParams(symbols=["AAPL"], name="half", nominal=1.0))
+    container.add(_FullSignal, StrategyParams(symbols=["AAPL"], name="full", nominal=1.0))
     container.get_signals(_bundle(["AAPL"]))
 
     assert len(collected) == 1
     assert abs(collected[0].combined["AAPL"].signal - 0.75) < 1e-9
 
 
-def test_strategy_params_name_defaults_to_empty():
-    params = StrategyParams(symbols=["AAPL"])
-    assert params.name == ""
+def test_strategy_params_name_is_required():
+    import pytest
+
+    with pytest.raises(TypeError):
+        StrategyParams(symbols=["AAPL"])
 
 
 def test_strategy_params_name_can_be_set():
@@ -231,7 +233,7 @@ def test_container_emits_strategy_bundle_event():
     """Container emits StrategyBundleEvent (not SignalBundleEvent) after this change."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="always_long"))
     container.get_signals(_bundle(["AAPL"]))
     assert len(collected) == 1
     assert isinstance(collected[0], StrategyBundleEvent)
@@ -241,7 +243,7 @@ def test_strategy_bundle_combined_matches_signal():
     """combined field on StrategyBundleEvent carries the aggregated signal."""
     collected = []
     container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="always_long"))
     container.get_signals(_bundle(["AAPL"]))
     assert "AAPL" in collected[0].combined
     assert abs(collected[0].combined["AAPL"].signal - 1.0) < 1e-9
@@ -288,15 +290,6 @@ def test_strategy_id_uses_name_when_provided():
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="my_strat"))
     container.get_signals(_bundle(["AAPL"]))
     assert "my_strat" in collected[0].per_strategy
-
-
-def test_strategy_id_fallback_uses_classname_and_index():
-    """When name is empty, strategy ID is ClassName_index."""
-    collected = []
-    container = StrategyContainer(emit=collected.append, get_bars=lambda s, n: [])
-    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"]))
-    container.get_signals(_bundle(["AAPL"]))
-    assert "_AlwaysLong_0" in collected[0].per_strategy
 
 
 def test_full_exit_sell_attribution_distributed_to_previously_long():

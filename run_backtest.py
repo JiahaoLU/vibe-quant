@@ -1,15 +1,17 @@
 """
 Entry point — wire all components together and run the backtest.
-Modify SYMBOLS, START, END, INITIAL_CAPITAL, FAST_WINDOW, SLOW_WINDOW,
-COMMISSION_PCT, SLIPPAGE_PCT, MARKET_IMPACT_ETA to experiment.
+Modify START, END, INITIAL_CAPITAL, COMMISSION_PCT, SLIPPAGE_PCT,
+MARKET_IMPACT_ETA to experiment. Strategy-specific params live in
+strategy_params/<strategy_name>.json and are registered in
+strategy_params/params.json.
 """
 import queue
 
 from analysis.result_writer import DefaultResultWriter
 from external.yahoo import fetch_daily_bars
-from strategies.sma_crossover_strategy import SMACrossoverStrategy, SMACrossoverStrategyParams
 from trading.backtester import Backtester
 from trading.impl import (
+    JsonStrategyParamsLoader,
     SimulatedExecutionHandler,
     SimplePortfolio,
     StrategyContainer,
@@ -17,12 +19,10 @@ from trading.impl import (
 )
 
 # --- Configuration -----------------------------------------------------------
-SYMBOLS            = ["AAPL", "MSFT"]
 START              = "2020-01-01"
 END                = "2022-01-01"
+STRATEGY_PARAMS_DIR = "strategy_params"
 INITIAL_CAPITAL    = 10_000.0
-FAST_WINDOW        = 10
-SLOW_WINDOW        = 30
 COMMISSION_PCT     = 0.001  # 0.1% of trade value per fill
 SLIPPAGE_PCT       = 0.0005 # fixed spread floor (one-way minimum cost)
 MARKET_IMPACT_ETA  = 0.1    # square-root impact coefficient (Almgren et al.)
@@ -33,9 +33,10 @@ RESULTS_FORMAT     = "parquet"  # "parquet" or "csv"
 events   = queue.Queue()
 data     = None  # resolved after strategy symbols are known
 
+loader   = JsonStrategyParamsLoader(STRATEGY_PARAMS_DIR)
 strategy = StrategyContainer(events.put, lambda s, n: data.get_latest_bars(s, n))
-strategy.add(SMACrossoverStrategy, SMACrossoverStrategyParams(
-    symbols=SYMBOLS, fast=FAST_WINDOW, slow=SLOW_WINDOW))
+for strategy_cls, params in loader.load_all():
+    strategy.add(strategy_cls, params)
 
 symbols   = strategy.symbols
 data      = YahooDataHandler(events.put, symbols, start=START, end=END, fetch=fetch_daily_bars)

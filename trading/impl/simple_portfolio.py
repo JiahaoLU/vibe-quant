@@ -72,7 +72,14 @@ class SimplePortfolio(Portfolio):
         if not emitted_any:
             self._emit_order("", bar_bundle.timestamp, "HOLD", 0)
 
-    def _emit_order(self, symbol: str, timestamp: datetime, direction: str, qty: int, bar: TickEvent | None) -> None:
+    def _emit_order(
+        self,
+        symbol: str,
+        timestamp: datetime,
+        direction: str,
+        qty: int,
+        bar: TickEvent | None = None,
+    ) -> None:
         order = OrderEvent(
             symbol=symbol,
             timestamp=timestamp,
