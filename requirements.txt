@@ -15,3 +15,7 @@ yfinance>=0.2
 # Result writing and analysis (DefaultResultWriter):
 pandas>=2.0
 pyarrow>=14.0
+
+# Live trading:
+alpaca-py>=0.13
+pytest-asyncio>=0.23
