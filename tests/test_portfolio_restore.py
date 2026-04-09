@@ -23,7 +23,7 @@ def _bundle(symbol: str, signal: float) -> StrategyBundleEvent:
 
 
 def test_restore_sets_holdings_and_cash():
-    from trading.impl.simple_portfolio import SimplePortfolio
+    from trading.impl.portfolio.simple_portfolio import SimplePortfolio
 
     portfolio = SimplePortfolio(
         emit=MagicMock(),
@@ -38,7 +38,7 @@ def test_restore_sets_holdings_and_cash():
 
 
 def test_on_signal_drops_signal_when_risk_guard_returns_none():
-    from trading.impl.simple_portfolio import SimplePortfolio
+    from trading.impl.portfolio.simple_portfolio import SimplePortfolio
 
     mock_guard = MagicMock()
     mock_guard.check.return_value = None  # guard halts trading
@@ -56,7 +56,7 @@ def test_on_signal_drops_signal_when_risk_guard_returns_none():
 
 
 def test_on_signal_uses_modified_event_from_risk_guard():
-    from trading.impl.simple_portfolio import SimplePortfolio
+    from trading.impl.portfolio.simple_portfolio import SimplePortfolio
     from trading.events import SignalEvent, StrategyBundleEvent
 
     ts = datetime(2024, 1, 2, 16, 5)
@@ -83,7 +83,7 @@ def test_on_signal_uses_modified_event_from_risk_guard():
 
 
 def test_on_signal_without_risk_guard_stores_pending_signals():
-    from trading.impl.simple_portfolio import SimplePortfolio
+    from trading.impl.portfolio.simple_portfolio import SimplePortfolio
 
     portfolio = SimplePortfolio(
         emit=MagicMock(),

@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from ..base.data import DataHandler
-from ..events import BarBundleEvent, Event, TickEvent
+from ...base.data import DataHandler
+from ...events import BarBundleEvent, Event, TickEvent
 from external.alpaca import fetch_bars
 
 ET = ZoneInfo("America/New_York")

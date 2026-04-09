@@ -26,7 +26,7 @@ async def _null_fill_stream():
 
 @pytest.mark.asyncio
 async def test_runner_calls_reconciler_hydrate_before_first_bar():
-    from trading.impl.live_runner import LiveRunner
+    from trading.live_runner import LiveRunner
 
     events = queue.Queue()
     data = MagicMock()
@@ -46,7 +46,7 @@ async def test_runner_calls_reconciler_hydrate_before_first_bar():
 
 @pytest.mark.asyncio
 async def test_runner_dispatches_bar_bundle_to_portfolio_and_strategy():
-    from trading.impl.live_runner import LiveRunner
+    from trading.live_runner import LiveRunner
 
     events = queue.Queue()
     bundle = _bar_bundle()
@@ -76,7 +76,7 @@ async def test_runner_dispatches_bar_bundle_to_portfolio_and_strategy():
 
 @pytest.mark.asyncio
 async def test_runner_dispatches_order_to_execution():
-    from trading.impl.live_runner import LiveRunner
+    from trading.live_runner import LiveRunner
 
     events = queue.Queue()
     ts = datetime(2024, 1, 2, 16, 5)
@@ -107,7 +107,7 @@ async def test_runner_dispatches_order_to_execution():
 
 @pytest.mark.asyncio
 async def test_runner_puts_fill_events_from_stream_onto_queue():
-    from trading.impl.live_runner import LiveRunner
+    from trading.live_runner import LiveRunner
 
     fill_event = FillEvent(
         symbol="AAPL", timestamp=datetime(2024, 1, 2, 16, 5),

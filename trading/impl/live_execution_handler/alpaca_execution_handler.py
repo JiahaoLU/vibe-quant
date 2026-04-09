@@ -1,6 +1,6 @@
 from typing import Callable
 
-from ..events import Event
+from ...events import Event
 from .alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
 
 

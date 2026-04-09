@@ -15,7 +15,7 @@ def _bundle(signals: dict[str, float], ts=None) -> StrategyBundleEvent:
 
 
 def test_check_passes_event_when_within_limits():
-    from trading.impl.risk_guard import RiskGuard
+    from trading.impl.risk_guard.risk_guard import RiskGuard
 
     # max_position_pct=0.60: max_signal = 0.60 * 10_000 / 10_000 = 0.60
     # signal=0.5 < 0.60 → not clamped; equity drop 0% < 5% limit → not halted
@@ -30,7 +30,7 @@ def test_check_passes_event_when_within_limits():
 
 
 def test_check_returns_none_when_daily_loss_limit_breached():
-    from trading.impl.risk_guard import RiskGuard
+    from trading.impl.risk_guard.risk_guard import RiskGuard
 
     guard = RiskGuard(max_daily_loss_pct=0.05, max_position_pct=0.20, initial_capital=10_000.0)
     guard.reset_day(current_equity=10_000.0)
@@ -43,7 +43,7 @@ def test_check_returns_none_when_daily_loss_limit_breached():
 
 
 def test_check_clamps_signal_when_position_cap_exceeded():
-    from trading.impl.risk_guard import RiskGuard
+    from trading.impl.risk_guard.risk_guard import RiskGuard
 
     # initial_capital=10_000, max_position_pct=0.10
     # At price=100, signal=0.5 → target_qty = 0.5 * 10000 / 100 = 50 shares = $5000 = 50% of equity
@@ -59,7 +59,7 @@ def test_check_clamps_signal_when_position_cap_exceeded():
 
 
 def test_check_auto_resets_on_new_trading_day():
-    from trading.impl.risk_guard import RiskGuard
+    from trading.impl.risk_guard.risk_guard import RiskGuard
 
     guard = RiskGuard(max_daily_loss_pct=0.05, max_position_pct=0.20, initial_capital=10_000.0)
     guard.reset_day(current_equity=9_000.0)   # day 1 open
@@ -73,7 +73,7 @@ def test_check_auto_resets_on_new_trading_day():
 
 
 def test_reset_day_updates_baseline():
-    from trading.impl.risk_guard import RiskGuard
+    from trading.impl.risk_guard.risk_guard import RiskGuard
 
     guard = RiskGuard(max_daily_loss_pct=0.05, max_position_pct=0.20, initial_capital=10_000.0)
     guard.reset_day(current_equity=8_000.0)

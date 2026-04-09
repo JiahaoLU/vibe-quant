@@ -7,7 +7,7 @@ import pytest
 
 from external.yahoo import fetch_daily_bars
 from trading.base.universe_builder import UniverseBuilder
-from trading.impl.yahoo_data_handler import YahooDataHandler
+from trading.impl.data_handler.yahoo_data_handler import YahooDataHandler
 from trading.events import BarBundleEvent, EventType
 
 

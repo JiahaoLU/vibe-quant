@@ -20,7 +20,7 @@ def _order(symbol="AAPL", direction="BUY", qty=10, price=150.0) -> OrderEvent:
 
 
 def test_paper_execute_order_calls_submit_order():
-    from trading.impl.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
 
     collected = []
     handler = AlpacaPaperExecutionHandler(
@@ -28,7 +28,7 @@ def test_paper_execute_order_calls_submit_order():
         api_key="key",
         secret="secret",
     )
-    with patch("trading.impl.alpaca_paper_execution_handler.submit_order", return_value="ord-1") as mock_sub:
+    with patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order", return_value="ord-1") as mock_sub:
         handler.execute_order(_order())
 
     mock_sub.assert_called_once_with(
@@ -39,7 +39,7 @@ def test_paper_execute_order_calls_submit_order():
 
 
 def test_live_execute_order_calls_submit_order_with_paper_false():
-    from trading.impl.alpaca_execution_handler import AlpacaExecutionHandler
+    from trading.impl.live_execution_handler.alpaca_execution_handler import AlpacaExecutionHandler
 
     collected = []
     handler = AlpacaExecutionHandler(
@@ -48,7 +48,7 @@ def test_live_execute_order_calls_submit_order_with_paper_false():
         secret="secret",
     )
     # submit_order is imported in the paper handler module (shared by both handlers)
-    with patch("trading.impl.alpaca_paper_execution_handler.submit_order", return_value="ord-2") as mock_sub:
+    with patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order", return_value="ord-2") as mock_sub:
         handler.execute_order(_order(direction="SELL"))
 
     mock_sub.assert_called_once_with(
@@ -58,11 +58,11 @@ def test_live_execute_order_calls_submit_order_with_paper_false():
 
 
 def test_execute_order_ignores_hold():
-    from trading.impl.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
 
     collected = []
     handler = AlpacaPaperExecutionHandler(emit=collected.append, api_key="k", secret="s")
-    with patch("trading.impl.alpaca_paper_execution_handler.submit_order") as mock_sub:
+    with patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order") as mock_sub:
         handler.execute_order(_order(direction="HOLD", qty=0))
 
     mock_sub.assert_not_called()
@@ -72,7 +72,7 @@ def test_execute_order_ignores_hold():
 
 @pytest.mark.asyncio
 async def test_fill_stream_yields_fill_events_from_websocket():
-    from trading.impl.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
     from trading.events import EventType
     from contextlib import asynccontextmanager
 
@@ -97,7 +97,7 @@ async def test_fill_stream_yields_fill_events_from_websocket():
     handler = AlpacaPaperExecutionHandler(emit=MagicMock(), api_key="k", secret="s")
     handler._pending_orders["ord-1"] = ("AAPL", "BUY", 10)
 
-    with patch("trading.impl.alpaca_paper_execution_handler.open_fill_stream", _mock_stream):
+    with patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.open_fill_stream", _mock_stream):
         async with handler.fill_stream() as fill_q:
             fill_event = await asyncio.wait_for(fill_q.get(), timeout=1.0)
 

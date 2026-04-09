@@ -1,7 +1,7 @@
 from datetime import datetime
 from trading.base.strategy import Strategy, StrategyBase
 from trading.base.strategy_params import StrategyParams
-from trading.impl.strategy_container import StrategyContainer
+from trading.impl.strategy_signal_generator.strategy_container import StrategyContainer
 from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, StrategyBundleEvent, TickEvent
 
 

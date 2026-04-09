@@ -5,9 +5,9 @@ from collections import deque
 from datetime import date, datetime, timedelta
 from typing import Callable
 
-from ..base.data import DataHandler
-from ..base.universe_builder import UniverseBuilder
-from ..events import BarBundleEvent, Event, TickEvent
+from ...base.data import DataHandler
+from ...base.universe_builder import UniverseBuilder
+from ...events import BarBundleEvent, Event, TickEvent
 
 
 class MultiCSVDataHandler(DataHandler):

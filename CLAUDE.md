@@ -53,10 +53,11 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 ## Adding a new component type (e.g. RiskManager)
 
 1. Define a new `EventType` member in `trading/events.py` if a new event is needed
-2. Create the ABC in `trading/base/risk.py`; create the implementation in `trading/impl/risk.py`
-3. Export both from their respective `__init__.py`
-4. Add a dispatch case to the `match` block in `trading/backtester.py`
-5. Wire it in `run_backtest.py`
+2. For backtest-only components: create the ABC in `trading/base/<name>.py`. For live-only components (reconcilers, risk guards, runners): create the ABC under `trading/base/live/<name>.py`
+3. Create a new subdirectory `trading/impl/<name>/` with the implementation `trading/impl/<name>/my_impl.py`
+4. Export both from their respective `__init__.py`
+5. Add a dispatch case to the `match` block in `trading/backtester.py` (backtest) or wire it directly in `run_live.py` (live)
+6. Wire it in `run_backtest.py` or `run_live.py`
 
 ## Key files
 
@@ -64,10 +65,14 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 |---|---|
 | `trading/events.py` | Single source of truth for all event dataclasses. Edit this first when changing the data model. |
 | `trading/backtester.py` | Central event loop. The `match` block is the only place that routes events to handlers. |
-| `trading/base/` | ABCs only — no business logic, no imports from `trading/impl/`. |
-| `trading/impl/` | Concrete implementations — always import their ABC from `trading/base/`. |
-| `trading/impl/data.py` | `get_latest_bars` deque is load-bearing — strategies depend on it for indicator history. |
-| `run_backtest.py` | Wiring point. All configuration constants live here. |
+| `trading/base/` | ABCs only — no business logic, no imports from `trading/impl/`. Live-only ABCs live under `trading/base/live/`. |
+| `trading/impl/` | Concrete implementations — always import their ABC from `trading/base/`. Organized into subdirectories by component type (e.g. `data_handler/`, `portfolio/`, `execution_handler/`). |
+| `trading/impl/data_handler/multi_csv_data_handler.py` | `get_latest_bars` deque is load-bearing — strategies depend on it for indicator history. |
+| `trading/live_runner.py` | asyncio event loop for live trading; reconciles on startup, drains fill stream, handles SIGINT/SIGTERM. Sits at the `trading/` level (not under `impl/`) because it owns the top-level live loop. |
+| `trading/impl/risk_guard/risk_guard.py` | Injected into `SimplePortfolio`; enforces daily loss limit and per-symbol position cap before each rebalance. |
+| `external/alpaca.py` | Thin wrappers around the `alpaca-py` SDK used by all Alpaca implementations. |
+| `run_backtest.py` | Backtest wiring point. All backtest configuration constants live here. |
+| `run_live.py` | Live/paper trading wiring point. Set `MODE`, `BAR_FREQ`, risk limits, and credentials here. |
 | `plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |
 
 ## CSV data format

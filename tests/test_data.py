@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from trading.base.universe_builder import UniverseBuilder
-from trading.impl.multi_csv_data_handler import MultiCSVDataHandler
+from trading.impl.data_handler.multi_csv_data_handler import MultiCSVDataHandler
 from trading.events import BarBundleEvent, EventType
 
 

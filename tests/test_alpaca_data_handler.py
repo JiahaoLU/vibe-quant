@@ -14,7 +14,7 @@ def _raw_bar(symbol="AAPL", o=100.0, h=101.0, l=99.0, c=100.5, v=50000.0):
 
 
 def test_get_latest_bars_returns_empty_before_any_bars():
-    from trading.impl.alpaca_data_handler import AlpacaDataHandler
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
 
     handler = AlpacaDataHandler(
         emit=MagicMock(),
@@ -27,7 +27,7 @@ def test_get_latest_bars_returns_empty_before_any_bars():
 
 
 def test_get_latest_bars_returns_tick_events_after_update():
-    from trading.impl.alpaca_data_handler import AlpacaDataHandler
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
 
     handler = AlpacaDataHandler(
         emit=MagicMock(),
@@ -38,7 +38,7 @@ def test_get_latest_bars_returns_tick_events_after_update():
     )
     fake_bars = {"AAPL": _raw_bar()}
     with (
-        patch("trading.impl.alpaca_data_handler.fetch_bars", return_value=fake_bars),
+        patch("trading.impl.data_handler.alpaca_data_handler.fetch_bars", return_value=fake_bars),
         patch.object(handler, "_seconds_until_next_bar", return_value=0.0),
     ):
         result = asyncio.run(handler.update_bars_async())
@@ -51,7 +51,7 @@ def test_get_latest_bars_returns_tick_events_after_update():
 
 
 def test_update_bars_async_emits_bar_bundle_event():
-    from trading.impl.alpaca_data_handler import AlpacaDataHandler
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
     from trading.events import EventType
 
     collected = []
@@ -64,7 +64,7 @@ def test_update_bars_async_emits_bar_bundle_event():
     )
     fake_bars = {"AAPL": _raw_bar()}
     with (
-        patch("trading.impl.alpaca_data_handler.fetch_bars", return_value=fake_bars),
+        patch("trading.impl.data_handler.alpaca_data_handler.fetch_bars", return_value=fake_bars),
         patch.object(handler, "_seconds_until_next_bar", return_value=0.0),
     ):
         asyncio.run(handler.update_bars_async())
@@ -75,7 +75,7 @@ def test_update_bars_async_emits_bar_bundle_event():
 
 
 def test_update_bars_async_returns_false_when_shutdown_requested():
-    from trading.impl.alpaca_data_handler import AlpacaDataHandler
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
 
     handler = AlpacaDataHandler(
         emit=MagicMock(),

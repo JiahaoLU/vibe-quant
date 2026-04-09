@@ -1,7 +1,7 @@
 import csv
 from datetime import datetime
 
-from ..base import UniverseBuilder
+from ...base import UniverseBuilder
 
 
 class IndexConstituentsUniverseBuilder(UniverseBuilder):

@@ -2,7 +2,7 @@ import math
 from datetime import datetime
 
 from trading.events import FillEvent, OrderEvent
-from trading.impl.simulated_execution_handler import SimulatedExecutionHandler
+from trading.impl.execution_handler.simulated_execution_handler import SimulatedExecutionHandler
 
 
 def _order(

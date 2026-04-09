@@ -3,7 +3,7 @@ import os
 import tempfile
 from datetime import datetime
 
-from trading.impl.index_constituents_universe_builder import IndexConstituentsUniverseBuilder
+from trading.impl.universe_builder.index_constituents_universe_builder import IndexConstituentsUniverseBuilder
 
 
 def _make_manifest(rows: list[dict]) -> str:

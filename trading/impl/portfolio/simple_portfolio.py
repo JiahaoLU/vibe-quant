@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Callable
 
-from ..base.portfolio import Portfolio
-from ..events import BarBundleEvent, Event, FillEvent, OrderEvent, StrategyBundleEvent, TickEvent
+from ...base.portfolio import Portfolio
+from ...events import BarBundleEvent, Event, FillEvent, OrderEvent, StrategyBundleEvent, TickEvent
 
 
 class SimplePortfolio(Portfolio):
@@ -42,6 +42,13 @@ class SimplePortfolio(Portfolio):
         self._strategy_traded_value: dict[str, float] = {}
         self._strategy_qty: dict[str, dict[str, float]] = {}  # sid → symbol → attributed shares held
 
+    def _holdings_market_value(self) -> float:
+        return sum(
+            self._holdings.get(s, 0) * bars[-1].close
+            for s in self._symbols
+            if (bars := self._get_bars(s, 1))
+        )
+
     def fill_pending_orders(self, bar_bundle: BarBundleEvent) -> None:
         pending = self._pending_signals
         self._pending_signals = None
@@ -61,11 +68,7 @@ class SimplePortfolio(Portfolio):
         self._current_attribution = pending.per_strategy
 
         # Compute current holdings market value for leverage check
-        holdings_value = sum(
-            self._holdings.get(s, 0) * bars[-1].close
-            for s in self._symbols
-            if (bars := self._get_bars(s, 1))
-        )
+        holdings_value = self._holdings_market_value()
         current_equity = self._cash + holdings_value
         max_gross_exposure = current_equity * self._max_leverage
 
@@ -128,17 +131,14 @@ class SimplePortfolio(Portfolio):
 
     def on_signal(self, event: StrategyBundleEvent) -> None:
         if self._risk_guard is not None:
-            market_value = sum(
-                self._holdings.get(s, 0) * bars[-1].close
-                for s in self._symbols
-                if (bars := self._get_bars(s, 1))
-            )
-            current_equity = self._cash + market_value
             current_prices = {
                 s: bars[-1].close
                 for s in self._symbols
                 if (bars := self._get_bars(s, 1))
             }
+            current_equity = self._cash + sum(
+                self._holdings.get(s, 0) * p for s, p in current_prices.items()
+            )
             event = self._risk_guard.check(event, current_prices, current_equity)
             if event is None:
                 return

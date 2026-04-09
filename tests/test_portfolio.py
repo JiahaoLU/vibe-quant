@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from trading.impl.simple_portfolio import SimplePortfolio
+from trading.impl.portfolio.simple_portfolio import SimplePortfolio
 from trading.events import (
     BarBundleEvent, FillEvent, OrderEvent, StrategyBundleEvent, SignalEvent, TickEvent,
 )

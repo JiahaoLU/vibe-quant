@@ -2,8 +2,8 @@ from typing import Callable
 
 from trading.base.strategy_params import StrategyParams
 
-from ..base.strategy import Strategy, StrategySignalGenerator
-from ..events import BarBundleEvent, Event, StrategyBundleEvent, SignalEvent, TickEvent
+from ...base.strategy import Strategy, StrategySignalGenerator
+from ...events import BarBundleEvent, Event, StrategyBundleEvent, SignalEvent, TickEvent
 
 
 class StrategyContainer(StrategySignalGenerator):

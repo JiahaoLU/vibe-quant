@@ -6,7 +6,7 @@ import pytest
 from strategies.sma_crossover_strategy import SMACrossoverStrategy, SMACrossoverStrategyParams
 from trading.base.strategy_params import StrategyParams
 from trading.base.strategy_params_loader import StrategyParamsLoader
-from trading.impl.json_strategy_params_loader import JsonStrategyParamsLoader
+from trading.impl.strategy_params_loader.json_strategy_params_loader import JsonStrategyParamsLoader
 
 
 def test_strategy_params_loader_is_abstract():

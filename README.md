@@ -7,17 +7,20 @@ A minimal, extensible event-driven trading engine and backtester written in pure
 All components communicate through an `emit: Callable[[Event], None]` injected at construction — no direct cross-component calls. The concrete `queue.Queue` is owned by `run_backtest.py` and `Backtester` only.
 
 ```
-DataHandler → BarBundleEvent → StrategyContainer → SignalBundleEvent → Portfolio → OrderEvent → ExecutionHandler → FillEvent → Portfolio
+DataHandler → BarBundleEvent → StrategyContainer → SignalBundleEvent → [RiskGuard] → Portfolio → OrderEvent → ExecutionHandler → FillEvent → Portfolio
 ```
 
 | Component | File | Responsibility |
 |---|---|---|
-| `DataHandler` | `trading/impl/multi_csv_data_handler.py` / `yahoo_data_handler.py` | Replays historical bars; emits `BarBundleEvent` |
-| `StrategyContainer` | `trading/impl/strategy_container.py` | Aggregates weighted signals from all strategies; emits one `SignalBundleEvent` per bar |
+| `DataHandler` | `trading/impl/data_handler/multi_csv_data_handler.py` / `yahoo_data_handler.py` / `alpaca_data_handler.py` | Emits `BarBundleEvent`; CSV/Yahoo replay historical bars; Alpaca streams live bars |
+| `StrategyContainer` | `trading/impl/strategy_signal_generator/strategy_container.py` | Aggregates weighted signals from all strategies; emits one `SignalBundleEvent` per bar |
 | `Strategy` | `strategies/sma_crossover_strategy.py` | Consumes bar bundles; returns `SignalBundleEvent` with normalised float weights |
-| `Portfolio` | `trading/impl/simple_portfolio.py` | Rebalances to target weights; emits `OrderEvent`; tracks equity |
-| `ExecutionHandler` | `trading/impl/simulated_execution_handler.py` | Simulates fills; emits `FillEvent` |
-| `Backtester` | `trading/backtester.py` | Owns the event queue; drives the main loop |
+| `RiskGuard` | `trading/impl/risk_guard/risk_guard.py` | Pre-trade check: enforces daily loss limit and per-symbol position cap; returns `None` to halt |
+| `Portfolio` | `trading/impl/portfolio/simple_portfolio.py` | Rebalances to target weights; emits `OrderEvent`; tracks equity |
+| `ExecutionHandler` | `trading/impl/execution_handler/simulated_execution_handler.py` / `live_execution_handler/alpaca_*.py` | Simulates fills (backtest) or routes orders to Alpaca (live/paper); emits `FillEvent` |
+| `Backtester` | `trading/backtester.py` | Owns the event queue; drives the main (backtest) loop |
+| `LiveRunner` | `trading/live_runner.py` | asyncio loop; reconciles positions on startup, drains fill stream, handles graceful shutdown |
+| `PositionReconciler` | `trading/impl/position_reconciler/alpaca_reconciler.py` | Queries broker on startup and calls `portfolio.restore(holdings, cash)` |
 
 ### Event types
 
@@ -52,6 +55,32 @@ python run_backtest.py
 # 5. Visualize results (select the "vibe-quant" kernel in the notebook)
 jupyter notebook plot_results.ipynb
 ```
+
+## Live / paper trading
+
+```bash
+# Set credentials (paper and live use the same key pair; MODE controls the endpoint)
+export ALPACA_API_KEY=your_key
+export ALPACA_SECRET_KEY=your_secret
+
+# Paper trading (default — safe, uses Alpaca paper endpoint)
+python run_live.py
+
+# Live trading (real capital — change MODE = "live" in run_live.py first)
+python run_live.py
+```
+
+Key configuration constants at the top of `run_live.py`:
+
+```python
+MODE               = "paper"   # "paper" | "live"
+BAR_FREQ           = "1d"      # "1d" daily; "5m" intraday
+INITIAL_CAPITAL    = 10_000.0
+MAX_DAILY_LOSS_PCT = 0.05      # halt if equity drops 5% from day open
+MAX_POSITION_PCT   = 0.20      # cap any single position at 20% of equity
+```
+
+On startup `LiveRunner` calls `AlpacaReconciler.hydrate()` which syncs broker positions into the portfolio before the first bar arrives. On SIGINT/SIGTERM it drains any in-flight fills and shuts down cleanly.
 
 Output:
 
@@ -159,16 +188,36 @@ And create `strategy_params/my_strategy.json`:
 │   │   ├── strategy_params.py          # StrategyParams base dataclass
 │   │   ├── strategy_params_loader.py   # StrategyParamsLoader ABC
 │   │   ├── portfolio.py                # Portfolio ABC
-│   │   └── execution.py               # ExecutionHandler ABC
+│   │   ├── execution.py                # ExecutionHandler ABC
+│   │   └── live/
+│   │       ├── risk_guard.py           # RiskGuard ABC
+│   │       ├── reconciler.py           # PositionReconciler ABC
+│   │       └── runner.py               # LiveRunner ABC
 │   ├── impl/
-│   │   ├── json_strategy_params_loader.py  # registry-based JSON loader
-│   │   ├── multi_csv_data_handler.py   # CSV-backed data handler
-│   │   ├── yahoo_data_handler.py       # Yahoo Finance data handler
-│   │   ├── strategy_container.py       # Holds + dispatches to strategies
-│   │   ├── simple_portfolio.py         # SimplePortfolio
-│   │   └── simulated_execution_handler.py
+│   │   ├── data_handler/
+│   │   │   ├── alpaca_data_handler.py          # Alpaca live data handler (async bar streaming)
+│   │   │   ├── multi_csv_data_handler.py       # CSV-backed data handler
+│   │   │   └── yahoo_data_handler.py           # Yahoo Finance data handler
+│   │   ├── execution_handler/
+│   │   │   └── simulated_execution_handler.py  # Simulates fills for backtesting
+│   │   ├── live_execution_handler/
+│   │   │   ├── alpaca_execution_handler.py     # Alpaca live order routing (real capital)
+│   │   │   └── alpaca_paper_execution_handler.py  # Alpaca paper endpoint
+│   │   ├── portfolio/
+│   │   │   └── simple_portfolio.py             # SimplePortfolio (supports restore())
+│   │   ├── position_reconciler/
+│   │   │   └── alpaca_reconciler.py            # Hydrates portfolio from broker on startup
+│   │   ├── risk_guard/
+│   │   │   └── risk_guard.py                   # Daily loss limit + per-symbol position cap
+│   │   ├── strategy_params_loader/
+│   │   │   └── json_strategy_params_loader.py  # Registry-based JSON loader
+│   │   ├── strategy_signal_generator/
+│   │   │   └── strategy_container.py           # Holds + dispatches to strategies
+│   │   └── universe_builder/
+│   │       └── index_constituents_universe_builder.py
 │   ├── events.py                       # all event dataclasses + EventType enum
-│   └── backtester.py                   # event loop
+│   ├── backtester.py                   # event loop (backtest)
+│   └── live_runner.py                  # asyncio event loop (live/paper trading)
 ├── strategy_params/
 │   ├── params.json                     # registry: strategy name → Strategy class path
 │   ├── sma_10_30.json                  # params for the sma_10_30 strategy instance
@@ -176,6 +225,7 @@ And create `strategy_params/my_strategy.json`:
 ├── strategies/
 │   └── sma_crossover_strategy.py       # SMACrossoverStrategy
 ├── external/
+│   ├── alpaca.py                       # Alpaca SDK wrappers (REST + stream)
 │   └── yahoo.py                        # fetch_daily_bars (yfinance wrapper)
 ├── data/
 │   ├── AAPL.csv
@@ -183,7 +233,8 @@ And create `strategy_params/my_strategy.json`:
 ├── results/
 │   └── ...                             # equity_curve, summary_metrics, strategy_pnl, strategy_metrics (csv/parquet + jpg charts)
 ├── tests/
-├── run_backtest.py                      # entry point + configuration
+├── run_backtest.py                      # backtest entry point + configuration
+├── run_live.py                          # live/paper trading entry point + configuration
 ├── plot_results.ipynb                   # equity curve, drawdown, trades, per-strategy metrics & PnL
 └── requirements.txt
 ```
@@ -199,10 +250,13 @@ Python 3.10+ (uses `match` statement).
 | `ipykernel` | Registers the venv as a Jupyter kernel (`vibe-quant`) |
 | `pytest>=7.0` | Test suite (`tests/`) |
 | `pandas>=2.0` | `plot_results.ipynb` — loads result files for display |
+| `pyarrow>=14.0` | Parquet result writing (`DefaultResultWriter`) |
+| `alpaca-py>=0.13` | `AlpacaDataHandler`, `AlpacaExecutionHandler`, `AlpacaReconciler` — live/paper trading |
+| `pytest-asyncio>=0.23` | Async test support for live trading components |
 
 Install: `pip install -r requirements.txt`
 
 ## Extension points
 
-- **RiskManager** — insert between Portfolio and Execution to enforce max drawdown / position limits
-- **Live trading** — replace `YahooDataHandler` with a streaming data source; replace `SimulatedExecutionHandler` with a broker API client
+- **Custom RiskGuard** — subclass `trading.base.live.risk_guard.RiskGuard`; inject via `SimplePortfolio(risk_guard=...)` to add new pre-trade checks without touching portfolio logic
+- **New broker** — implement `PositionReconciler` and a matching `ExecutionHandler`; swap them in `run_live.py` without changing any other component
