@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Callable
 
@@ -17,3 +18,7 @@ class DataHandler(ABC):
     def get_latest_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:
         """Return the last N bars for a symbol."""
         ...
+
+    async def update_bars_async(self) -> bool:
+        """Default: wraps update_bars() via asyncio.to_thread. Override for real async."""
+        return await asyncio.to_thread(self.update_bars)

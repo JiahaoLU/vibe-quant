@@ -304,3 +304,20 @@ def test_csv_handler_without_universe_builder_unchanged():
     finally:
         os.unlink(aapl)
         os.unlink(msft)
+
+
+def test_update_bars_async_default_calls_update_bars():
+    """Default update_bars_async() wraps update_bars() in a thread."""
+    import asyncio
+    from unittest.mock import patch
+
+    handler = MultiCSVDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        start="2020-01-01",
+        end="2020-01-10",
+    )
+    with patch.object(handler, "update_bars", return_value=False) as mock_sync:
+        result = asyncio.run(handler.update_bars_async())
+    assert result is False
+    mock_sync.assert_called_once()

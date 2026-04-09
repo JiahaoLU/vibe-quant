@@ -1,5 +1,6 @@
 from .data          import DataHandler
 from .execution     import ExecutionHandler
+from .live          import LiveExecutionHandler, LiveRunner, PositionReconciler, RiskGuard
 from .portfolio     import Portfolio
 from .result_writer import BacktestResultWriter
 from .strategy      import Strategy, StrategyBase, StrategySignalGenerator
@@ -11,7 +12,11 @@ __all__ = [
     "BacktestResultWriter",
     "DataHandler",
     "ExecutionHandler",
+    "LiveExecutionHandler",
+    "LiveRunner",
     "Portfolio",
+    "PositionReconciler",
+    "RiskGuard",
     "Strategy",
     "StrategyBase",
     "StrategySignalGenerator",

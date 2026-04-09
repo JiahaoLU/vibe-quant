@@ -17,6 +17,11 @@ class Portfolio(ABC):
     @abstractmethod
     def on_fill(self, event: FillEvent) -> None: ...
 
+    @abstractmethod
+    def restore(self, holdings: dict[str, int], cash: float) -> None:
+        """Hydrate portfolio state from an external source (e.g. broker reconciliation)."""
+        ...
+
     @property
     @abstractmethod
     def equity_curve(self) -> list[dict]: ...

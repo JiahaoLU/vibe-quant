@@ -180,6 +180,10 @@ class SimplePortfolio(Portfolio):
             },
         })
 
+    def restore(self, holdings: dict[str, int], cash: float) -> None:
+        self._holdings = dict(holdings)
+        self._cash = cash
+
     @property
     def equity_curve(self) -> list[dict]:
         return self._equity_curve
