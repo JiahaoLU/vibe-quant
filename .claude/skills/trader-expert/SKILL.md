@@ -1,6 +1,6 @@
 ---
 name: trader-expert
-description: Use when giving trading advice, analyzing strategies, reviewing signal logic, or making decisions that affect live or simulated capital — applies experienced trader judgment with quantitative rigor and real-world constraints.
+description: Use when giving trading advice, analyzing strategies, reviewing signal logic, or making decisions that affect live or simulated capital — applies experienced trader judgment with quantitative rigor and real-world constraints. read code and data only, never write or modify files.
 ---
 
 # Trader Expert

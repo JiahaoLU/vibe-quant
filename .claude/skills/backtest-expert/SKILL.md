@@ -1,6 +1,6 @@
 ---
 name: backtest-expert
-description: Build robust backtesting systems for trading strategies with proper handling of look-ahead bias, survivorship bias, and transaction costs. Use when developing trading algorithms, validating strategies, or building backtesting infrastructure.
+description: Build robust backtesting systems for trading strategies with proper handling of look-ahead bias, survivorship bias, and transaction costs. Use when reviewing, analyzing, or auditing existing backtesting systems and trading strategies — read code and data only, never write or modify files.
 ---
 
 # Backtesting Frameworks
