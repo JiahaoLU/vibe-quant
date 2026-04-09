@@ -24,6 +24,7 @@ class SimplePortfolio(Portfolio):
         initial_capital: float = 10_000.0,
         max_leverage:    float = 1.0,
         fill_cost_buffer: float = 0.002,
+        risk_guard=None,   # RiskGuard | None — avoid circular import, type checked at runtime
     ):
         super().__init__(emit)
         self._get_bars                = get_bars
@@ -32,6 +33,7 @@ class SimplePortfolio(Portfolio):
         self._initial_capital         = initial_capital
         self._max_leverage            = max_leverage
         self._fill_cost_buffer        = fill_cost_buffer
+        self._risk_guard              = risk_guard
         self._holdings: dict[str, int] = {s: 0 for s in symbols}
         self._equity_curve: list[dict] = []
         self._pending_signals: StrategyBundleEvent | None = None
@@ -125,6 +127,21 @@ class SimplePortfolio(Portfolio):
         self._emit(order)
 
     def on_signal(self, event: StrategyBundleEvent) -> None:
+        if self._risk_guard is not None:
+            market_value = sum(
+                self._holdings.get(s, 0) * bars[-1].close
+                for s in self._symbols
+                if (bars := self._get_bars(s, 1))
+            )
+            current_equity = self._cash + market_value
+            current_prices = {
+                s: bars[-1].close
+                for s in self._symbols
+                if (bars := self._get_bars(s, 1))
+            }
+            event = self._risk_guard.check(event, current_prices, current_equity)
+            if event is None:
+                return
         self._pending_signals = event
 
     def on_fill(self, event: FillEvent) -> None:
