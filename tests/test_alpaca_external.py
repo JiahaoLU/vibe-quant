@@ -112,3 +112,38 @@ def test_get_order_status_returns_fill_info():
     assert result["filled_avg_price"] == pytest.approx(150.25)
     assert result["symbol"] == "AAPL"
     assert result["direction"] == "BUY"
+
+
+def test_cancel_all_open_orders_calls_sdk_cancel():
+    from external.alpaca import cancel_all_open_orders
+
+    mock_client = MagicMock()
+    mock_client.cancel_orders.return_value = [MagicMock(), MagicMock()]
+
+    with patch("external.alpaca.TradingClient", return_value=mock_client):
+        cancel_all_open_orders(api_key="key", secret="secret", paper=True)
+
+    mock_client.cancel_orders.assert_called_once()
+
+
+def test_cancel_all_open_orders_forwards_credentials():
+    from external.alpaca import cancel_all_open_orders
+
+    mock_client = MagicMock()
+
+    with patch("external.alpaca.TradingClient", return_value=mock_client) as mock_tc:
+        cancel_all_open_orders(api_key="my-key", secret="my-secret", paper=False)
+
+    mock_tc.assert_called_once_with("my-key", "my-secret", paper=False)
+    mock_client.cancel_orders.assert_called_once()
+
+
+def test_cancel_all_open_orders_logs_warning_on_failure():
+    from external.alpaca import cancel_all_open_orders
+
+    mock_client = MagicMock()
+    mock_client.cancel_orders.side_effect = RuntimeError("broker unavailable")
+
+    with patch("external.alpaca.TradingClient", return_value=mock_client):
+        # must not raise — failure is non-fatal
+        cancel_all_open_orders(api_key="key", secret="secret", paper=True)

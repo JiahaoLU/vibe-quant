@@ -4,8 +4,11 @@ Pure functions, no state, no imports from trading/.
 """
 import asyncio
 import contextlib
+import logging
 from datetime import datetime
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 from alpaca.data import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
@@ -119,6 +122,24 @@ def get_order_status(
         }
     except Exception:
         return None
+
+
+def cancel_all_open_orders(api_key: str, secret: str, paper: bool) -> None:
+    """Cancel all open orders at the broker.
+
+    Logs a warning and continues on failure — a cancel error does not corrupt
+    data, it only means stale orders may still be live at the broker.
+    """
+    logger.info("Cancelling all open broker orders before reconciliation.")
+    client = TradingClient(api_key, secret, paper=paper)
+    try:
+        client.cancel_orders()
+    except Exception as exc:
+        logger.warning(
+            "cancel_orders failed (%s); proceeding with reconciliation. "
+            "Stale orders may still be open at the broker.",
+            exc,
+        )
 
 
 @contextlib.asynccontextmanager
