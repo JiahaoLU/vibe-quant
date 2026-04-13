@@ -169,6 +169,10 @@ class MultiCSVDataHandler(DataHandler):
             current += timedelta(days=1)
         return result
 
+    def prefill(self) -> None:
+        """Backtest data is already loaded during initialization."""
+        return None
+
     def update_bars(self) -> bool:
         if self._index >= len(self._merged):
             return False

@@ -45,7 +45,7 @@ async def test_runner_calls_reconciler_hydrate_before_first_bar():
 
 
 @pytest.mark.asyncio
-async def test_runner_calls_prefill_on_data_handler_if_available():
+async def test_runner_calls_prefill_on_data_handler():
     from trading.live_runner import LiveRunner
 
     events = queue.Queue()
@@ -95,26 +95,6 @@ async def test_runner_prefill_called_after_hydrate_before_first_bar():
 
     assert call_order.index("hydrate") < call_order.index("prefill")
     assert call_order.index("prefill") < call_order.index("bar")
-
-
-@pytest.mark.asyncio
-async def test_runner_works_without_prefill_method_on_data_handler():
-    from trading.live_runner import LiveRunner
-
-    events = queue.Queue()
-    data = MagicMock(spec=["update_bars_async", "request_shutdown"])
-    data.update_bars_async = AsyncMock(return_value=False)
-    strategy = MagicMock()
-    portfolio = MagicMock()
-    execution = MagicMock()
-    execution.fill_stream = _null_fill_stream
-    reconciler = MagicMock()
-    reconciler.hydrate = AsyncMock()
-
-    runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler)
-    await runner.run()
-
-
 @pytest.mark.asyncio
 async def test_runner_dispatches_bar_bundle_to_portfolio_and_strategy():
     from trading.live_runner import LiveRunner

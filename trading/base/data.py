@@ -10,6 +10,11 @@ class DataHandler(ABC):
         self._emit = emit
 
     @abstractmethod
+    def prefill(self) -> None:
+        """Warm any in-memory history needed before bar processing begins."""
+        ...
+
+    @abstractmethod
     def update_bars(self) -> bool:
         """Emit the next bar bundle as a BarBundleEvent. Returns False when data is exhausted."""
         ...

@@ -321,3 +321,14 @@ def test_update_bars_async_default_calls_update_bars():
         result = asyncio.run(handler.update_bars_async())
     assert result is False
     mock_sync.assert_called_once()
+
+
+def test_multi_csv_prefill_is_noop():
+    handler = MultiCSVDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        start="2020-01-01",
+        end="2020-01-10",
+    )
+
+    assert handler.prefill() is None
