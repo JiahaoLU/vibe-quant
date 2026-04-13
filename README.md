@@ -56,6 +56,31 @@ python run_backtest.py
 jupyter notebook plot_results.ipynb
 ```
 
+Output:
+
+```
+Initial capital : $ 10,000.00
+Final equity    : $  7,834.38
+Total return    : -21.66%
+Trades (fills)  : 28
+Equity curve    : results/equity_curve.csv
+```
+
+## Configuration
+
+Edit the constants at the top of `run_backtest.py`:
+
+```python
+START              = "2020-01-01"      # backtest start date (Yahoo data)
+END                = "2022-01-01"      # backtest end date
+INITIAL_CAPITAL    = 10_000.0          # starting portfolio cash
+COMMISSION_PCT     = 0.001             # 0.1% of trade value per fill
+SLIPPAGE_PCT       = 0.0005            # fixed spread floor (one-way minimum cost)
+MARKET_IMPACT_ETA  = 0.1               # square-root impact coefficient
+RESULTS_DIR        = "results"         # output directory for backtest artifacts
+RESULTS_FORMAT     = "parquet"         # "parquet" or "csv"
+```
+
 ## Live / paper trading
 
 ```bash
@@ -81,31 +106,6 @@ MAX_POSITION_PCT   = 0.20      # cap any single position at 20% of equity
 ```
 
 On startup `LiveRunner` calls `AlpacaReconciler.hydrate()` which syncs broker positions into the portfolio before the first bar arrives. On SIGINT/SIGTERM it drains any in-flight fills and shuts down cleanly.
-
-Output:
-
-```
-Initial capital : $ 10,000.00
-Final equity    : $  7,834.38
-Total return    : -21.66%
-Trades (fills)  : 28
-Equity curve    : results/equity_curve.csv
-```
-
-## Configuration
-
-Edit the constants at the top of `run_backtest.py`:
-
-```python
-START              = "2020-01-01"      # backtest start date (Yahoo data)
-END                = "2022-01-01"      # backtest end date
-INITIAL_CAPITAL    = 10_000.0          # starting portfolio cash
-COMMISSION_PCT     = 0.001             # 0.1% of trade value per fill
-SLIPPAGE_PCT       = 0.0005            # fixed spread floor (one-way minimum cost)
-MARKET_IMPACT_ETA  = 0.1               # square-root impact coefficient
-RESULTS_DIR        = "results"         # output directory for backtest artifacts
-RESULTS_FORMAT     = "parquet"         # "parquet" or "csv"
-```
 
 Strategy-specific parameters (symbols, windows, etc.) live in `strategy_params/<strategy_name>.json`. Strategies are registered in `strategy_params/params.json`.
 
@@ -135,7 +135,7 @@ from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent
 @dataclass
 class MyStrategyParams(StrategyParams):
     lookback: int   = 20
-    nominal:  float = 5_000.0   # cash this strategy controls
+    nominal:  float = 1.0   # relative weight vs other strategies in the same StrategyContainer
 
 class MyStrategy(Strategy):
     def _init(self, strategy_params: StrategyParams):
@@ -174,7 +174,7 @@ Then register it in `strategy_params/params.json`:
 And create `strategy_params/my_strategy.json`:
 
 ```json
-{ "symbols": ["AAPL", "MSFT"], "lookback": 20, "nominal": 5000.0 }
+{ "symbols": ["AAPL", "MSFT"], "lookback": 20, "nominal": 1.0 }
 ```
 
 ## Project structure
