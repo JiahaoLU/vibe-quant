@@ -72,6 +72,49 @@ def fetch_bars(
     return result
 
 
+def fetch_bars_history(
+    symbols: list[str],
+    bar_freq: str,
+    start: datetime,
+    end: datetime,
+    api_key: str,
+    secret: str,
+) -> dict[str, list[dict]]:
+    """Fetch all OHLCV bars for symbols in [start, end].
+
+    Returns {symbol: [oldest, ..., newest]} sorted by timestamp.
+    Symbols with no bars in the window are omitted.
+    """
+    client = StockHistoricalDataClient(api_key, secret)
+    request = StockBarsRequest(
+        symbol_or_symbols=symbols,
+        timeframe=_timeframe(bar_freq),
+        start=start,
+        end=end,
+    )
+    bar_set = client.get_stock_bars(request)
+    result = {}
+    for symbol in symbols:
+        bars = bar_set[symbol]
+        if not bars:
+            continue
+        result[symbol] = sorted(
+            [
+                {
+                    "timestamp": bar.timestamp,
+                    "open": float(bar.open),
+                    "high": float(bar.high),
+                    "low": float(bar.low),
+                    "close": float(bar.close),
+                    "volume": float(bar.volume),
+                }
+                for bar in bars
+            ],
+            key=lambda bar: bar["timestamp"],
+        )
+    return result
+
+
 def submit_order(
     symbol: str,
     direction: Literal["BUY", "SELL"],

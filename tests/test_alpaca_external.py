@@ -40,6 +40,85 @@ def test_fetch_bars_returns_dict_of_dicts():
     assert result["AAPL"]["open"] == 100.0
 
 
+def test_fetch_bars_history_returns_all_bars_in_window():
+    from external.alpaca import fetch_bars_history
+
+    mock_client = MagicMock()
+    mock_bar_set = MagicMock()
+
+    bar1 = _mock_bar("AAPL", c=100.5)
+    bar1.timestamp = datetime(2024, 1, 2, 21, 5, tzinfo=timezone.utc)
+    bar2 = _mock_bar("AAPL", o=101.0, h=102.0, l=100.0, c=101.5, v=60000)
+    bar2.timestamp = datetime(2024, 1, 3, 21, 5, tzinfo=timezone.utc)
+
+    mock_bar_set.__getitem__ = lambda self, sym: [bar1, bar2]
+    mock_client.get_stock_bars.return_value = mock_bar_set
+
+    with patch("external.alpaca.StockHistoricalDataClient", return_value=mock_client):
+        result = fetch_bars_history(
+            symbols=["AAPL"],
+            bar_freq="1d",
+            start=datetime(2024, 1, 1),
+            end=datetime(2024, 1, 4),
+            api_key="key",
+            secret="secret",
+        )
+
+    assert "AAPL" in result
+    assert len(result["AAPL"]) == 2
+    assert result["AAPL"][0]["close"] == 100.5
+    assert result["AAPL"][1]["close"] == 101.5
+    assert result["AAPL"][0]["timestamp"] == datetime(2024, 1, 2, 21, 5, tzinfo=timezone.utc)
+
+
+def test_fetch_bars_history_returns_bars_sorted_by_timestamp():
+    from external.alpaca import fetch_bars_history
+
+    mock_client = MagicMock()
+    mock_bar_set = MagicMock()
+
+    newer_bar = _mock_bar("AAPL", o=101.0, h=102.0, l=100.0, c=101.5, v=60000)
+    newer_bar.timestamp = datetime(2024, 1, 3, 21, 5, tzinfo=timezone.utc)
+    older_bar = _mock_bar("AAPL", c=100.5)
+    older_bar.timestamp = datetime(2024, 1, 2, 21, 5, tzinfo=timezone.utc)
+
+    mock_bar_set.__getitem__ = lambda self, sym: [newer_bar, older_bar]
+    mock_client.get_stock_bars.return_value = mock_bar_set
+
+    with patch("external.alpaca.StockHistoricalDataClient", return_value=mock_client):
+        result = fetch_bars_history(
+            symbols=["AAPL"],
+            bar_freq="1d",
+            start=datetime(2024, 1, 1),
+            end=datetime(2024, 1, 4),
+            api_key="key",
+            secret="secret",
+        )
+
+    assert result["AAPL"][0]["timestamp"] < result["AAPL"][1]["timestamp"]
+
+
+def test_fetch_bars_history_omits_symbol_with_no_bars():
+    from external.alpaca import fetch_bars_history
+
+    mock_client = MagicMock()
+    mock_bar_set = MagicMock()
+    mock_bar_set.__getitem__ = lambda self, sym: []
+    mock_client.get_stock_bars.return_value = mock_bar_set
+
+    with patch("external.alpaca.StockHistoricalDataClient", return_value=mock_client):
+        result = fetch_bars_history(
+            symbols=["AAPL"],
+            bar_freq="1d",
+            start=datetime(2024, 1, 1),
+            end=datetime(2024, 1, 4),
+            api_key="key",
+            secret="secret",
+        )
+
+    assert result == {}
+
+
 def test_submit_order_returns_order_id():
     from external.alpaca import submit_order
 

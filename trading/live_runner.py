@@ -54,6 +54,8 @@ class LiveRunner(LiveRunnerBase):
                 pass  # signal handlers may not be supported in all environments
 
         await self._reconciler.hydrate(self._portfolio)
+        if hasattr(self._data, "prefill"):
+            self._data.prefill()
 
         async with self._execution.fill_stream() as fill_q:
             drain_task = asyncio.create_task(self._drain_fill_stream(fill_q))

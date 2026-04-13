@@ -91,3 +91,233 @@ def test_update_bars_async_returns_false_when_shutdown_requested():
 
     result = asyncio.run(_run())
     assert result is False
+
+
+def test_prefill_populates_deques_with_historical_bars():
+    from trading.events import TickEvent
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+        max_history=200,
+    )
+
+    fake_history = {
+        "AAPL": [
+            _raw_bar(c=100.5),
+            {
+                "timestamp": datetime(2024, 1, 3, 21, 5, tzinfo=timezone.utc),
+                "open": 101.0,
+                "high": 102.0,
+                "low": 100.0,
+                "close": 101.5,
+                "volume": 60000.0,
+            },
+        ]
+    }
+
+    with patch(
+        "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+        return_value=fake_history,
+    ):
+        handler.prefill()
+
+    bars = handler.get_latest_bars("AAPL", 10)
+    assert len(bars) == 2
+    assert bars[0].close == pytest.approx(100.5)
+    assert bars[1].close == pytest.approx(101.5)
+    assert isinstance(bars[0], TickEvent)
+
+
+def test_prefill_does_not_emit_events():
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    collected = []
+    handler = AlpacaDataHandler(
+        emit=collected.append,
+        symbols=["AAPL"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+    )
+
+    with patch(
+        "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+        return_value={"AAPL": [_raw_bar()]},
+    ):
+        handler.prefill()
+
+    assert collected == []
+
+
+def test_prefill_skips_symbol_missing_from_history():
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL", "MSFT"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+    )
+
+    with patch(
+        "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+        return_value={"AAPL": [_raw_bar()]},
+    ):
+        handler.prefill()
+
+    assert len(handler.get_latest_bars("AAPL", 1)) == 1
+    assert handler.get_latest_bars("MSFT", 1) == []
+
+
+def test_prefill_respects_max_history_deque_limit():
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+        max_history=3,
+    )
+
+    fake_history = {
+        "AAPL": [
+            {
+                "timestamp": datetime(2024, 1, day, 21, 5, tzinfo=timezone.utc),
+                "open": float(100 + day),
+                "high": float(101 + day),
+                "low": float(99 + day),
+                "close": float(100.5 + day),
+                "volume": 50000.0,
+            }
+            for day in range(1, 6)
+        ]
+    }
+
+    with patch(
+        "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+        return_value=fake_history,
+    ):
+        handler.prefill()
+
+    bars = handler.get_latest_bars("AAPL", 10)
+    assert len(bars) == 3
+    assert bars[-1].close == pytest.approx(105.5)
+
+
+def test_prefill_daily_requests_max_history_times_two_calendar_days():
+    from datetime import timedelta
+
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+        max_history=200,
+    )
+
+    calls = []
+
+    def fake_fetch_history(**kwargs):
+        calls.append(kwargs)
+        return {}
+
+    with patch(
+        "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+        side_effect=fake_fetch_history,
+    ):
+        handler.prefill()
+
+    assert len(calls) == 1
+    span = calls[0]["end"] - calls[0]["start"]
+    assert span >= timedelta(days=399)   # 200 * 2 days, allow 1-day float
+
+
+def test_prefill_intraday_requests_bar_minutes_times_max_history_times_three():
+    from datetime import timedelta
+
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        bar_freq="5m",
+        api_key="key",
+        secret="secret",
+        max_history=200,
+    )
+
+    calls = []
+
+    def fake_fetch_history(**kwargs):
+        calls.append(kwargs)
+        return {}
+
+    with patch(
+        "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+        side_effect=fake_fetch_history,
+    ):
+        handler.prefill()
+
+    assert len(calls) == 1
+    span = calls[0]["end"] - calls[0]["start"]
+    # 200 bars * 5 min * 3 = 3000 minutes; verify window is in that range (±1 min float)
+    assert timedelta(minutes=2999) <= span <= timedelta(minutes=3001)
+
+
+def test_prefill_warning_fired_with_symbol_name_when_no_history():
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL", "MSFT"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+    )
+
+    # MSFT has no bars
+    fake_history = {"AAPL": [_raw_bar()]}
+
+    with (
+        patch(
+            "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+            return_value=fake_history,
+        ),
+        patch("trading.impl.data_handler.alpaca_data_handler.logger") as mock_log,
+    ):
+        handler.prefill()
+
+    mock_log.warning.assert_called_once()
+    assert "MSFT" in mock_log.warning.call_args[0][1]
+
+
+def test_prefill_propagates_api_exception():
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+
+    handler = AlpacaDataHandler(
+        emit=MagicMock(),
+        symbols=["AAPL"],
+        bar_freq="1d",
+        api_key="key",
+        secret="secret",
+    )
+
+    with (
+        patch(
+            "trading.impl.data_handler.alpaca_data_handler.fetch_bars_history",
+            side_effect=RuntimeError("API unavailable"),
+        ),
+        pytest.raises(RuntimeError, match="API unavailable"),
+    ):
+        handler.prefill()

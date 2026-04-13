@@ -1,16 +1,18 @@
 import asyncio
+import logging
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
 from ...base.data import DataHandler
 from ...events import BarBundleEvent, Event, TickEvent
-from external.alpaca import fetch_bars
+from external.alpaca import fetch_bars, fetch_bars_history
 
 ET = ZoneInfo("America/New_York")
 _DAILY_BAR_HOUR   = 16
 _DAILY_BAR_MINUTE = 5
+logger = logging.getLogger(__name__)
 
 
 class AlpacaDataHandler(DataHandler):
@@ -44,6 +46,60 @@ class AlpacaDataHandler(DataHandler):
 
     def request_shutdown(self) -> None:
         self._shutdown_event.set()
+
+    def prefill(self) -> None:
+        """Warm deques with historical bars before the live loop starts.
+
+        Window:
+          - daily bars:    max_history * 2 calendar days (~max_history trading days)
+          - intraday bars: max_history * bar_minutes * 3 minutes (3× buffer covers
+                           non-trading hours and weekends without fetching months of data)
+
+        Any exception from fetch_bars_history (network, auth) propagates and
+        aborts startup intentionally — trading with empty deques produces
+        incorrect signals, so fail-fast is the right policy.
+        """
+        now = datetime.now(tz=ET)
+        if self._bar_freq == "1d":
+            start = now - timedelta(days=self._max_history * 2)
+        else:
+            bar_minutes = int(self._bar_freq.rstrip("m"))
+            start = now - timedelta(minutes=self._max_history * bar_minutes * 3)
+        history = fetch_bars_history(
+            symbols=self._symbols,
+            bar_freq=self._bar_freq,
+            start=start,
+            end=now,
+            api_key=self._api_key,
+            secret=self._secret,
+        )
+
+        for symbol in self._symbols:
+            raw_bars = history.get(symbol)
+            if not raw_bars:
+                logger.warning(
+                    "prefill: no history returned for %s; deque will remain empty at startup",
+                    symbol,
+                )
+                continue
+            for raw in raw_bars:
+                self._deques[symbol].append(
+                    TickEvent(
+                        symbol=symbol,
+                        timestamp=raw["timestamp"],
+                        open=raw["open"],
+                        high=raw["high"],
+                        low=raw["low"],
+                        close=raw["close"],
+                        volume=raw["volume"],
+                    )
+                )
+            logger.info(
+                "prefill: loaded %d bars for %s (max_history=%d)",
+                len(self._deques[symbol]),
+                symbol,
+                self._max_history,
+            )
 
     def update_bars(self) -> bool:
         """Synchronous fallback — not used in live; runs asyncio internally."""
