@@ -192,3 +192,53 @@ async def test_runner_puts_fill_events_from_stream_onto_queue():
     await runner.run()
 
     portfolio.on_fill.assert_called_once_with(fill_event)
+
+
+@pytest.mark.asyncio
+async def test_runner_calls_risk_guard_reset_day_after_prefill():
+    """reset_day() must be called with portfolio.equity after hydrate+prefill."""
+    from trading.live_runner import LiveRunner
+    from unittest.mock import MagicMock
+
+    call_order = []
+
+    events = queue.Queue()
+    data = MagicMock()
+    data.update_bars_async = AsyncMock(return_value=False)
+    data.prefill = MagicMock(side_effect=lambda: call_order.append("prefill"))
+
+    portfolio = MagicMock()
+    portfolio.equity = 9_800.0
+
+    risk_guard = MagicMock()
+    risk_guard.reset_day = MagicMock(side_effect=lambda eq: call_order.append(("reset_day", eq)))
+
+    execution = MagicMock()
+    execution.fill_stream = _null_fill_stream
+    reconciler = MagicMock()
+    reconciler.hydrate = AsyncMock(side_effect=lambda _p: call_order.append("hydrate"))
+
+    runner = LiveRunner(events, data, MagicMock(), portfolio, execution, reconciler, risk_guard)
+    await runner.run()
+
+    risk_guard.reset_day.assert_called_once_with(9_800.0)
+    assert call_order.index("prefill") < call_order.index(("reset_day", 9_800.0))
+
+
+@pytest.mark.asyncio
+async def test_runner_skips_reset_day_when_no_risk_guard():
+    """LiveRunner must not error when risk_guard is omitted."""
+    from trading.live_runner import LiveRunner
+
+    events = queue.Queue()
+    data = MagicMock()
+    data.update_bars_async = AsyncMock(return_value=False)
+    portfolio = MagicMock()
+    execution = MagicMock()
+    execution.fill_stream = _null_fill_stream
+    reconciler = MagicMock()
+    reconciler.hydrate = AsyncMock()
+
+    # No risk_guard argument — must complete without AttributeError
+    runner = LiveRunner(events, data, MagicMock(), portfolio, execution, reconciler)
+    await runner.run()  # should not raise

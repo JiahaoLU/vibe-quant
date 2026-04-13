@@ -5,6 +5,7 @@ import signal
 
 from .base.live.execution  import LiveExecutionHandler
 from .base.live.reconciler import PositionReconciler
+from .base.live.risk_guard import RiskGuard
 from .base.live.runner     import LiveRunner as LiveRunnerBase
 from .base.portfolio       import Portfolio
 from .base.strategy        import StrategySignalGenerator
@@ -36,6 +37,7 @@ class LiveRunner(LiveRunnerBase):
         portfolio:  Portfolio,
         execution:  LiveExecutionHandler,
         reconciler: PositionReconciler,
+        risk_guard: RiskGuard | None = None,
     ):
         self._events     = events
         self._data       = data
@@ -43,6 +45,7 @@ class LiveRunner(LiveRunnerBase):
         self._portfolio  = portfolio
         self._execution  = execution
         self._reconciler = reconciler
+        self._risk_guard = risk_guard
         self._shutdown   = False
 
     async def run(self) -> None:
@@ -55,6 +58,8 @@ class LiveRunner(LiveRunnerBase):
 
         await self._reconciler.hydrate(self._portfolio)
         self._data.prefill()
+        if self._risk_guard is not None:
+            self._risk_guard.reset_day(self._portfolio.equity)
 
         async with self._execution.fill_stream() as fill_q:
             drain_task = asyncio.create_task(self._drain_fill_stream(fill_q))

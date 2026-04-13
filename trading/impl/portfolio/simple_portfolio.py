@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Callable
 
+from trading.base.live.risk_guard import RiskGuard
+
 from ...base.portfolio import Portfolio
 from ...events import BarBundleEvent, Event, FillEvent, OrderEvent, StrategyBundleEvent, TickEvent
 
@@ -24,7 +26,7 @@ class SimplePortfolio(Portfolio):
         initial_capital: float = 10_000.0,
         max_leverage:    float = 1.0,
         fill_cost_buffer: float = 0.002,
-        risk_guard=None,   # RiskGuard | None — avoid circular import, type checked at runtime
+        risk_guard: RiskGuard | None = None,
     ):
         super().__init__(emit)
         self._get_bars                = get_bars
@@ -67,9 +69,9 @@ class SimplePortfolio(Portfolio):
 
         self._current_attribution = pending.per_strategy
 
-        # Compute current holdings market value for leverage check
-        holdings_value = self._holdings_market_value()
-        current_equity = self._cash + holdings_value
+        # Compute equity and derive holdings value for leverage check
+        current_equity = self.equity
+        holdings_value = current_equity - self._cash
         max_gross_exposure = current_equity * self._max_leverage
 
         available_cash = self._cash
@@ -136,9 +138,7 @@ class SimplePortfolio(Portfolio):
                 for s in self._symbols
                 if (bars := self._get_bars(s, 1))
             }
-            current_equity = self._cash + sum(
-                self._holdings.get(s, 0) * p for s, p in current_prices.items()
-            )
+            current_equity = self.equity
             event = self._risk_guard.check(event, current_prices, current_equity)
             if event is None:
                 return
@@ -200,6 +200,10 @@ class SimplePortfolio(Portfolio):
     def restore(self, holdings: dict[str, int], cash: float) -> None:
         self._holdings = dict(holdings)
         self._cash = cash
+
+    @property
+    def equity(self) -> float:
+        return self._cash + self._holdings_market_value()
 
     @property
     def equity_curve(self) -> list[dict]:

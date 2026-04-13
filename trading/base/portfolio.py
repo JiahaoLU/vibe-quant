@@ -24,6 +24,10 @@ class Portfolio(ABC):
 
     @property
     @abstractmethod
+    def equity(self) -> float: ...
+
+    @property
+    @abstractmethod
     def equity_curve(self) -> list[dict]: ...
 
     @property

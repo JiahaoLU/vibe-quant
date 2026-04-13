@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime
 
 from trading.impl.portfolio.simple_portfolio import SimplePortfolio
@@ -58,6 +59,32 @@ def test_portfolio_constructor_accepts_emit_callable():
     collected = []
     portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
     assert portfolio is not None
+
+
+def test_equity_is_cash_plus_holdings_market_value():
+    """equity property must equal cash + sum(holdings * latest_close)."""
+    portfolio = SimplePortfolio(
+        lambda e: None,
+        _get_bars({"AAPL": 150.0}),
+        ["AAPL"],
+        initial_capital=10_000.0,
+        fill_cost_buffer=0.0,
+    )
+    # Simulate 20 shares held; cash reduced accordingly
+    portfolio.on_fill(_fill("AAPL", "BUY", 20, 150.0))   # cash: 10_000 − 20*150 − 1 = 6_999
+
+    # equity = 6_999 (cash) + 20 * 150 (market value at latest close) = 9_999
+    assert portfolio.equity == pytest.approx(10_000.0 - 1.0)  # commission=1 erodes equity
+
+
+def test_equity_equals_initial_capital_with_no_holdings():
+    portfolio = SimplePortfolio(
+        lambda e: None,
+        _get_bars({"AAPL": 100.0}),
+        ["AAPL"],
+        initial_capital=10_000.0,
+    )
+    assert portfolio.equity == pytest.approx(10_000.0)
 
 
 def test_long_signal_emits_buy_order():

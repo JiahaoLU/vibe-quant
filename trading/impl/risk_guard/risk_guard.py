@@ -43,9 +43,13 @@ class RiskGuard(RiskGuardBase):
         current_prices: dict[str, float],
         current_equity: float,
     ) -> StrategyBundleEvent | None:
-        # Auto-reset on new trading day (compares consecutive event dates)
+        # Seed on the very first event (only if reset_day wasn't already called),
+        # and auto-reset whenever the calendar date advances to a new trading day.
         event_date = event.timestamp.date()
-        if self._last_reset_date is not None and self._last_reset_date != event_date:
+        if self._last_reset_date is None:
+            if self._day_open_equity is None:
+                self._day_open_equity = current_equity
+        elif self._last_reset_date != event_date:
             self._day_open_equity = current_equity
         self._last_reset_date = event_date
 

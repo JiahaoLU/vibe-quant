@@ -82,7 +82,7 @@ portfolio = SimplePortfolio(
     risk_guard       = risk_guard,
 )
 
-runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler)
+runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler, risk_guard)
 
 if __name__ == "__main__":
     asyncio.run(runner.run())

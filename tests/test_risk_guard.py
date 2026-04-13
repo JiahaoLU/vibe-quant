@@ -82,3 +82,39 @@ def test_reset_day_updates_baseline():
     # 6% drop from 8000 = 7520 — breaches limit
     result = guard.check(event, current_prices={"AAPL": 150.0}, current_equity=7_520.0)
     assert result is None
+
+
+def test_check_enforces_loss_limit_on_first_call_without_reset_day():
+    """Guard must be active on session day 1 even if reset_day() was never called."""
+    from trading.impl.risk_guard.risk_guard import RiskGuard
+
+    guard = RiskGuard(max_daily_loss_pct=0.05, max_position_pct=0.20, initial_capital=10_000.0)
+    # No reset_day() call — simulates day-1 startup before the fix
+
+    # First call seeds _day_open_equity = 10_000; second call sees a 6% drop
+    event = _bundle({"AAPL": 0.2})
+    guard.check(event, current_prices={"AAPL": 150.0}, current_equity=10_000.0)
+    result = guard.check(event, current_prices={"AAPL": 150.0}, current_equity=9_400.0)
+
+    assert result is None
+
+
+def test_check_does_not_reset_baseline_mid_day():
+    """Multiple events on the same date must not move the day-open baseline."""
+    from trading.impl.risk_guard.risk_guard import RiskGuard
+
+    guard = RiskGuard(max_daily_loss_pct=0.05, max_position_pct=0.20, initial_capital=10_000.0)
+    ts_open  = datetime(2024, 1, 2, 9, 30)
+    ts_close = datetime(2024, 1, 2, 16, 0)
+
+    # First event: seeds baseline at 10_000
+    guard.check(_bundle({"AAPL": 0.2}, ts=ts_open),
+                current_prices={"AAPL": 150.0}, current_equity=10_000.0)
+    # Equity rises intraday — must NOT become the new baseline
+    guard.check(_bundle({"AAPL": 0.2}, ts=ts_close),
+                current_prices={"AAPL": 155.0}, current_equity=10_500.0)
+
+    # Now equity drops 6% from original 10_000 baseline → should halt
+    result = guard.check(_bundle({"AAPL": 0.2}, ts=ts_close),
+                         current_prices={"AAPL": 142.0}, current_equity=9_400.0)
+    assert result is None
