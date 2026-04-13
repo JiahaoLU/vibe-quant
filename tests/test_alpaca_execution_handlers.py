@@ -71,6 +71,39 @@ def test_execute_order_ignores_hold():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("terminal_status", [
+    "canceled", "cancelled", "rejected", "expired", "done_for_day"
+])
+async def test_poll_fallback_clears_terminal_orders(terminal_status):
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+    from contextlib import asynccontextmanager
+
+    ws_queue = asyncio.Queue()
+
+    @asynccontextmanager
+    async def _mock_stream(*args, **kwargs):
+        yield ws_queue
+
+    collected = []
+    handler = AlpacaPaperExecutionHandler(emit=collected.append, api_key="k", secret="s")
+    handler._pending_orders["ord-99"] = ("AAPL", "BUY", 5)
+
+    status_payload = {"status": terminal_status, "filled_qty": 0, "filled_avg_price": 0.0}
+
+    with (
+        patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.open_fill_stream", _mock_stream),
+        patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.get_order_status", return_value=status_payload),
+        patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler._POLL_INTERVAL", 0.05),
+    ):
+        async with handler.fill_stream() as fill_q:
+            await asyncio.sleep(0.15)  # allow at least one poll cycle
+
+    assert "ord-99" not in handler._pending_orders
+    assert fill_q.empty()   # no FillEvent emitted for terminal orders
+    assert collected == []
+
+
+@pytest.mark.asyncio
 async def test_fill_stream_yields_fill_events_from_websocket():
     from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
     from trading.events import EventType

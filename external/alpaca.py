@@ -19,6 +19,12 @@ from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.stream import TradingStream
 
 
+# Alpaca SDK may emit either spelling ("canceled" or "cancelled")
+TERMINAL_ORDER_STATUSES: frozenset[str] = frozenset({
+    "canceled", "cancelled", "rejected", "expired", "done_for_day"
+})
+
+
 def _timeframe(bar_freq: str) -> TimeFrame:
     if bar_freq == "1d":
         return TimeFrame.Day

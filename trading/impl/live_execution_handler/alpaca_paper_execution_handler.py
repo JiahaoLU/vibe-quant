@@ -7,7 +7,7 @@ from typing import Callable
 
 from ...base.live.execution import LiveExecutionHandler
 from ...events import Event, FillEvent, OrderEvent
-from external.alpaca import get_order_status, open_fill_stream, submit_order
+from external.alpaca import TERMINAL_ORDER_STATUSES, get_order_status, open_fill_stream, submit_order
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,10 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
                     if order_id in self._filled_order_ids:
                         continue
                     status = get_order_status(order_id, self._api_key, self._secret, self._PAPER)
-                    if status and status["status"] == "filled":
+                    if not status:
+                        continue
+                    order_status = status["status"]
+                    if order_status == "filled":
                         fill = FillEvent(
                             symbol=symbol,
                             timestamp=datetime.now(timezone.utc),
@@ -77,6 +80,12 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
                         self._filled_order_ids.add(order_id)
                         self._pending_orders.pop(order_id, None)
                         await fill_q.put(fill)
+                    elif order_status in TERMINAL_ORDER_STATUSES:
+                        logger.warning(
+                            "Order %s for %s %s×%s cleared with status %s",
+                            order_id, symbol, direction, qty, order_status,
+                        )
+                        self._pending_orders.pop(order_id, None)
 
         async with open_fill_stream(self._api_key, self._secret, paper=self._PAPER) as ws_q:
             ws_task   = asyncio.create_task(_bridge_ws(ws_q))
