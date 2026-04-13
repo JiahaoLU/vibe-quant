@@ -6,6 +6,17 @@ from ...base.strategy import Strategy, StrategySignalGenerator
 from ...events import BarBundleEvent, Event, StrategyBundleEvent, SignalEvent, TickEvent
 
 
+def _bar_freq_to_minutes(bar_freq: str) -> int:
+    """Convert a bar_freq string to its minute equivalent.
+
+    "1d" → 390  (6.5-hour trading day)
+    "Xm" → X    (e.g. "5m" → 5)
+    """
+    if bar_freq == "1d":
+        return 390
+    return int(bar_freq.rstrip("m"))
+
+
 class StrategyContainer(StrategySignalGenerator):
     """
     Holds multiple strategies, dispatches BarBundleEvents to each via calculate_signals,
@@ -46,6 +57,28 @@ class StrategyContainer(StrategySignalGenerator):
                     seen.add(sym)
                     result.append(sym)
         return result
+
+    @property
+    def required_freq(self) -> str:
+        """The finest bar_freq declared across all registered strategies.
+
+        Raises ValueError if daily ("1d") and intraday ("Xm") strategies are mixed,
+        since the demux step count (390 / X) is ambiguous for arbitrary minute freqs.
+        Returns "1d" when no strategies are registered.
+        """
+        if not self._strategies:
+            return "1d"
+        freqs = [s.strategy_params.bar_freq for s, _ in self._strategies]
+        kinds = {"daily" if f == "1d" else "intraday" for f in freqs}
+        if len(kinds) > 1:
+            raise ValueError(
+                "Cannot mix daily ('1d') and intraday ('Xm') strategies in the same "
+                "StrategyContainer. Use separate containers or a single frequency."
+            )
+        if "daily" in kinds:
+            return "1d"
+        minutes = [_bar_freq_to_minutes(f) for f in freqs]
+        return f"{min(minutes)}m"
 
     def emit(self, event: Event) -> None:
         self._emit_fn(event)
