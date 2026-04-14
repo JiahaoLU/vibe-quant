@@ -21,6 +21,12 @@ class StrategyBase(ABC):
 class StrategySignalGenerator(StrategyBase):
     """ABC for components that receive bar bundles and emit signal bundles."""
 
+    @property
+    @abstractmethod
+    def required_freq(self) -> str:
+        """The finest bar_freq needed across all contained strategies."""
+        ...
+
     @abstractmethod
     def emit(self, event: Event) -> None:
         """Emit an event downstream."""
