@@ -17,6 +17,36 @@ def _bar_freq_to_minutes(bar_freq: str) -> int:
     return int(bar_freq.rstrip("m"))
 
 
+def _aggregate_bars(bars: list[TickEvent], steps: int) -> list[TickEvent]:
+    """Aggregate fine-grained bars into coarser bars by grouping into chunks of `steps`.
+
+    Partial leading group is discarded. Returns up to len(bars)//steps bars.
+
+    Time: O(n)  Space: O(n/steps)
+    """
+    n_full = len(bars) // steps
+    if n_full == 0:
+        return []
+    offset = len(bars) - n_full * steps
+    result = []
+    for i in range(n_full):
+        start = offset + i * steps
+        end   = start + steps
+        group = bars[start:end]
+        result.append(TickEvent(
+            symbol=group[0].symbol,
+            timestamp=group[-1].timestamp,
+            open=group[0].open,
+            high=max(b.high for b in group),
+            low=min(b.low for b in group),
+            close=group[-1].close,
+            volume=sum(b.volume for b in group),
+            is_synthetic=all(b.is_synthetic for b in group),
+            is_delisted=group[-1].is_delisted,
+        ))
+    return result
+
+
 class StrategyContainer(StrategySignalGenerator):
     """
     Holds multiple strategies, dispatches BarBundleEvents to each via calculate_signals,
@@ -102,6 +132,23 @@ class StrategyContainer(StrategySignalGenerator):
             for s, _ in self._strategies
         ]
 
+    def _make_freq_adapter(
+        self,
+        idx: int,
+        get_bars_fn: Callable[[str, int], list[TickEvent]],
+    ) -> Callable[[str, int], list[TickEvent]]:
+        """Wrap get_bars_fn so it returns n bars at the strategy's own bar_freq.
+
+        Reads self._steps[idx] lazily at call time so the step is always correct
+        after all strategies have been registered and _recompute_steps() has run.
+        """
+        def adapted(symbol: str, n: int) -> list[TickEvent]:
+            steps = self._steps[idx] if idx < len(self._steps) else 1
+            if steps == 1:
+                return get_bars_fn(symbol, n)
+            return _aggregate_bars(get_bars_fn(symbol, n * steps), steps)
+        return adapted
+
     def emit(self, event: Event) -> None:
         self._emit_fn(event)
 
@@ -116,8 +163,10 @@ class StrategyContainer(StrategySignalGenerator):
         strategy_id = strategy_params.name or f"{strategy_class.__name__}_{len(self._strategies)}"
         if strategy_id in self._ids:
             raise ValueError(f"Strategy id {strategy_id!r} is already registered")
+        idx = len(self._strategies)
+        raw_get_bars = get_bars if get_bars is not None else self._get_bars
         instance = strategy_class(
-            get_bars=get_bars if get_bars is not None else self._get_bars,
+            get_bars=self._make_freq_adapter(idx, raw_get_bars),
             strategy_params=strategy_params,
         )
         self._strategies.append((instance, strategy_params.nominal))
@@ -131,10 +180,17 @@ class StrategyContainer(StrategySignalGenerator):
         Note: the strategy ID is always auto-generated as ClassName_index.
         To use a custom name, register via add() with StrategyParams.name instead.
         """
+        if any(s is strategy for s, _ in self._strategies):
+            raise ValueError("Strategy instance is already registered in this container")
+        strategy_id = f"{strategy.__class__.__name__}_{len(self._strategies)}"
+        if strategy_id in self._ids:
+            raise ValueError(f"Strategy id {strategy_id!r} is already registered")
+        idx = len(self._strategies)
         self._strategies.append((strategy, nominal))
         self._carried.append({})
-        self._ids.append(f"{strategy.__class__.__name__}_{len(self._strategies) - 1}")
+        self._ids.append(strategy_id)
         self._recompute_steps()
+        strategy._get_bars = self._make_freq_adapter(idx, strategy._get_bars)
 
     def get_signals(self, event: BarBundleEvent) -> None:
         # Snapshot carries before updating — needed for full-exit attribution
