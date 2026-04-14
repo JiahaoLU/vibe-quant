@@ -143,7 +143,7 @@ class StrategyContainer(StrategySignalGenerator):
         self._bar_count += 1
         any_new = False
         for i, (strategy, _) in enumerate(self._strategies):
-            steps = self._steps[i] if self._steps else 1
+            steps = self._steps[i] if self._steps else 1  # fallback: mixed-freq container fires all strategies
             if self._bar_count % steps != 0:
                 continue   # carry-forward unchanged; strategy not called this bar
             result = strategy.calculate_signals(event)

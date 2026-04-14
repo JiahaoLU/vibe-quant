@@ -130,6 +130,26 @@ def test_coarser_strategy_carry_forward_used_between_fires():
     assert len(emitted) == 1
 
 
+def test_on_get_signal_not_called_when_strategy_skipped():
+    """on_get_signal must not fire on bars where the strategy is gated out by demux."""
+    hook_calls = []
+
+    class _Tracking(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event): return None
+        def on_get_signal(self, result):
+            hook_calls.append(result)
+
+    container = _make_container()
+    container.add(_Stub, StrategyParams(symbols=["AAPL"], name="base", bar_freq="1m"))
+    container.add(_Tracking, StrategyParams(symbols=["AAPL"], name="slow", bar_freq="5m"))
+    for _ in range(4):  # bars 1-4: 5m strategy is gated
+        container.get_signals(_bundle(["AAPL"]))
+    assert hook_calls == []
+    container.get_signals(_bundle(["AAPL"]))  # bar 5: fires
+    assert len(hook_calls) == 1
+
+
 def test_daily_strategies_fire_on_every_bar():
     """All '1d' strategies (the default) fire on every bar — no behaviour change."""
     calls = []
