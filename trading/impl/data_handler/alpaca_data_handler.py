@@ -3,15 +3,18 @@ import logging
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Callable
-from zoneinfo import ZoneInfo
 
 from ...base.data import DataHandler
 from ...events import BarBundleEvent, Event, TickEvent
+from ...market_hours import (
+    MARKET_TZ,
+    MARKET_CLOSE_HOUR,
+    MARKET_CLOSE_MINUTE,
+    DAILY_BAR_FETCH_HOUR,
+    DAILY_BAR_FETCH_MINUTE,
+)
 from external.alpaca import fetch_bars, fetch_bars_history
 
-ET = ZoneInfo("America/New_York")
-_DAILY_BAR_HOUR   = 16
-_DAILY_BAR_MINUTE = 5
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +61,7 @@ class AlpacaDataHandler(DataHandler):
         aborts startup intentionally — trading with empty deques produces
         incorrect signals, so fail-fast is the right policy.
         """
-        now = datetime.now(tz=ET)
+        now = datetime.now(tz=MARKET_TZ)
         if self._bar_freq == "1d":
             start = now - timedelta(days=self._max_history * 2)
         else:
@@ -121,7 +124,7 @@ class AlpacaDataHandler(DataHandler):
             if self._shutdown_event.is_set():
                 return False
 
-        now = datetime.now(tz=ET)
+        now = datetime.now(tz=MARKET_TZ)
         bars = fetch_bars(
             symbols  = self._symbols,
             bar_freq = self._bar_freq,
@@ -150,7 +153,14 @@ class AlpacaDataHandler(DataHandler):
 
         if bundle_bars:
             ts = next(iter(bundle_bars.values())).timestamp
-            self._emit(BarBundleEvent(timestamp=ts, bars=bundle_bars))
+            if self._bar_freq == "1d":
+                is_eod = True
+            else:
+                bar_minutes = int(self._bar_freq.rstrip("m"))
+                ts_et = ts.astimezone(MARKET_TZ)
+                close_minutes = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE
+                is_eod = ts_et.hour * 60 + ts_et.minute + bar_minutes >= close_minutes
+            self._emit(BarBundleEvent(timestamp=ts, bars=bundle_bars, is_end_of_day=is_eod))
 
         return True
 
@@ -159,9 +169,9 @@ class AlpacaDataHandler(DataHandler):
         return list(dq)[-n:] if dq else []
 
     def _seconds_until_next_bar(self) -> float:
-        now = datetime.now(tz=ET)
+        now = datetime.now(tz=MARKET_TZ)
         if self._bar_freq == "1d":
-            target = now.replace(hour=_DAILY_BAR_HOUR, minute=_DAILY_BAR_MINUTE,
+            target = now.replace(hour=DAILY_BAR_FETCH_HOUR, minute=DAILY_BAR_FETCH_MINUTE,
                                  second=0, microsecond=0)
             if now >= target:
                 target += timedelta(days=1)

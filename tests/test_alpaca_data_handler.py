@@ -321,3 +321,86 @@ def test_prefill_propagates_api_exception():
         pytest.raises(RuntimeError, match="API unavailable"),
     ):
         handler.prefill()
+
+
+def test_update_bars_async_sets_is_end_of_day_true_for_daily_bar():
+    """Daily bars always have is_end_of_day=True."""
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+    from datetime import timezone
+
+    collected = []
+    handler = AlpacaDataHandler(
+        emit=collected.append, symbols=["AAPL"], bar_freq="1d",
+        api_key="key", secret="secret",
+    )
+    raw = {
+        "AAPL": {
+            "timestamp": datetime(2024, 1, 2, 21, 5, tzinfo=timezone.utc),
+            "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000.0,
+        }
+    }
+    with (
+        patch("trading.impl.data_handler.alpaca_data_handler.fetch_bars", return_value=raw),
+        patch.object(handler, "_seconds_until_next_bar", return_value=0.0),
+    ):
+        asyncio.run(handler.update_bars_async())
+
+    assert collected[0].is_end_of_day is True
+
+
+def test_update_bars_async_sets_is_end_of_day_true_for_last_intraday_bar():
+    """Intraday bar whose slot ends at market close has is_end_of_day=True.
+
+    For 5m bars, the last bar starts at 15:55 ET (15:55 + 5m = 16:00 = close).
+    Alpaca returns timestamps in UTC; 15:55 ET = 20:55 UTC in winter.
+    """
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+    from zoneinfo import ZoneInfo
+
+    collected = []
+    handler = AlpacaDataHandler(
+        emit=collected.append, symbols=["AAPL"], bar_freq="5m",
+        api_key="key", secret="secret",
+    )
+    # 15:55 ET on a non-DST day = 20:55 UTC
+    last_bar_ts = datetime(2024, 1, 2, 20, 55, tzinfo=ZoneInfo("UTC"))
+    raw = {
+        "AAPL": {
+            "timestamp": last_bar_ts,
+            "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000.0,
+        }
+    }
+    with (
+        patch("trading.impl.data_handler.alpaca_data_handler.fetch_bars", return_value=raw),
+        patch.object(handler, "_seconds_until_next_bar", return_value=0.0),
+    ):
+        asyncio.run(handler.update_bars_async())
+
+    assert collected[0].is_end_of_day is True
+
+
+def test_update_bars_async_sets_is_end_of_day_false_for_mid_session_intraday_bar():
+    """Intraday bar in the middle of the session has is_end_of_day=False."""
+    from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+    from zoneinfo import ZoneInfo
+
+    collected = []
+    handler = AlpacaDataHandler(
+        emit=collected.append, symbols=["AAPL"], bar_freq="5m",
+        api_key="key", secret="secret",
+    )
+    # 10:00 ET = 15:00 UTC (mid-session)
+    mid_bar_ts = datetime(2024, 1, 2, 15, 0, tzinfo=ZoneInfo("UTC"))
+    raw = {
+        "AAPL": {
+            "timestamp": mid_bar_ts,
+            "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000.0,
+        }
+    }
+    with (
+        patch("trading.impl.data_handler.alpaca_data_handler.fetch_bars", return_value=raw),
+        patch.object(handler, "_seconds_until_next_bar", return_value=0.0),
+    ):
+        asyncio.run(handler.update_bars_async())
+
+    assert collected[0].is_end_of_day is False
