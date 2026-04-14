@@ -45,6 +45,8 @@ class StrategyContainer(StrategySignalGenerator):
         self._strategies: list[tuple[Strategy, float]] = []   # (strategy, nominal)
         self._carried:    list[dict[str, float]]        = []   # parallel; symbol → last signal
         self._ids:        list[str]                     = []   # parallel; strategy id
+        self._bar_count: int       = 0
+        self._steps:     list[int] = []
 
     @property
     def symbols(self) -> list[str]:
@@ -80,6 +82,26 @@ class StrategyContainer(StrategySignalGenerator):
         minutes = [_bar_freq_to_minutes(f) for f in freqs]
         return f"{min(minutes)}m"
 
+    def _recompute_steps(self) -> None:
+        """Recompute the per-strategy bar step counts based on required_freq.
+
+        If the strategy mix is invalid (e.g. daily + intraday), steps are left
+        empty so that add() does not raise — the error surfaces later when
+        required_freq is accessed explicitly.
+        """
+        if not self._strategies:
+            self._steps = []
+            return
+        try:
+            req_minutes = _bar_freq_to_minutes(self.required_freq)
+        except ValueError:
+            self._steps = []
+            return
+        self._steps = [
+            _bar_freq_to_minutes(s.strategy_params.bar_freq) // req_minutes
+            for s, _ in self._strategies
+        ]
+
     def emit(self, event: Event) -> None:
         self._emit_fn(event)
 
@@ -101,6 +123,7 @@ class StrategyContainer(StrategySignalGenerator):
         self._strategies.append((instance, strategy_params.nominal))
         self._carried.append({})
         self._ids.append(strategy_id)
+        self._recompute_steps()
 
     def add_strategy(self, strategy: Strategy, nominal: float = 1.0) -> None:
         """Add a pre-constructed strategy instance with an explicit nominal.
@@ -111,13 +134,18 @@ class StrategyContainer(StrategySignalGenerator):
         self._strategies.append((strategy, nominal))
         self._carried.append({})
         self._ids.append(f"{strategy.__class__.__name__}_{len(self._strategies) - 1}")
+        self._recompute_steps()
 
     def get_signals(self, event: BarBundleEvent) -> None:
         # Snapshot carries before updating — needed for full-exit attribution
         prev_carried = [{**c} for c in self._carried]
 
+        self._bar_count += 1
         any_new = False
         for i, (strategy, _) in enumerate(self._strategies):
+            steps = self._steps[i] if self._steps else 1
+            if self._bar_count % steps != 0:
+                continue   # carry-forward unchanged; strategy not called this bar
             result = strategy.calculate_signals(event)
             strategy.on_get_signal(result)
             if result is not None:
