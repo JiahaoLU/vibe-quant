@@ -1,4 +1,5 @@
 import csv
+import math
 import os
 import random
 from collections import deque
@@ -113,7 +114,23 @@ class MultiCSVDataHandler(DataHandler):
         }
         self._save_bars(raw, "csv")
 
+    @staticmethod
+    def _freq_to_delta(freq: str) -> timedelta:
+        unit  = freq[-1]
+        value = int(freq[:-1])
+        if unit == 'd':
+            return timedelta(days=value)
+        if unit == 'h':
+            return timedelta(hours=value)
+        if unit == 'm':
+            return timedelta(minutes=value)
+        if unit == 's':
+            return timedelta(seconds=value)
+        raise ValueError(f"Unsupported bar_freq: {freq!r}")
+
     def _save_bars(self, raw: dict[str, dict[datetime, "TickEvent"]], suffix: str) -> None:
+        intraday = self._freq_to_delta(self._bar_freq) < timedelta(days=1)
+        ts_fmt   = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
         os.makedirs("results", exist_ok=True)
         for symbol, bars in raw.items():
             path = os.path.join("results", f"{symbol}_{suffix}.csv")
@@ -122,7 +139,7 @@ class MultiCSVDataHandler(DataHandler):
                 writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
                 for ts in sorted(bars):
                     bar = bars[ts]
-                    writer.writerow([ts.strftime("%Y-%m-%d"), bar.open, bar.high, bar.low, bar.close, bar.volume])
+                    writer.writerow([ts.strftime(ts_fmt), bar.open, bar.high, bar.low, bar.close, bar.volume])
 
     def _load(self, symbol: str, path: str, date_format: str) -> dict[datetime, TickEvent]:
         result: dict[datetime, TickEvent] = {}
@@ -147,26 +164,57 @@ class MultiCSVDataHandler(DataHandler):
         end_date   = date.fromisoformat(end)
         price      = 100.0
         result: dict[datetime, TickEvent] = {}
+        delta      = self._freq_to_delta(self._bar_freq)
+
+        # Scale daily drift/vol to per-bar using sqrt-of-time.
+        # One trading day = 390 minutes; daily params: drift=0.0003, vol=0.015.
+        _TRADING_MIN = 390.0
+        bar_minutes  = delta.total_seconds() / 60
+        if bar_minutes >= _TRADING_MIN:
+            # daily or multi-day: use daily params as-is
+            drift, vol, wick_vol = 0.0003, 0.015, 0.005
+            vol_scale = bar_minutes / _TRADING_MIN  # just for volume
+        else:
+            scale     = math.sqrt(bar_minutes / _TRADING_MIN)
+            drift     = 0.0003 * (bar_minutes / _TRADING_MIN)
+            vol       = 0.015  * scale
+            wick_vol  = 0.005  * scale
+            vol_scale = bar_minutes / _TRADING_MIN
+
         current = start_date
         while current < end_date:
             if current.weekday() < 5:
-                change = rng.gauss(0.0003, 0.015)
-                open_  = price
-                close  = round(open_ * (1 + change), 4)
-                high   = round(max(open_, close) * (1 + abs(rng.gauss(0, 0.005))), 4)
-                low    = round(min(open_, close) * (1 - abs(rng.gauss(0, 0.005))), 4)
-                volume = float(int(rng.uniform(500_000, 5_000_000)))
-                ts     = datetime(current.year, current.month, current.day)
-                result[ts] = TickEvent(
-                    symbol    = symbol,
-                    timestamp = ts,
-                    open      = open_,
-                    high      = high,
-                    low       = low,
-                    close     = close,
-                    volume    = volume,
-                )
-                price = close
+                if bar_minutes >= _TRADING_MIN:
+                    ts     = datetime(current.year, current.month, current.day)
+                    change = rng.gauss(drift, vol)
+                    open_  = price
+                    close  = round(open_ * (1 + change), 4)
+                    high   = round(max(open_, close) * (1 + abs(rng.gauss(0, wick_vol))), 4)
+                    low    = round(min(open_, close) * (1 - abs(rng.gauss(0, wick_vol))), 4)
+                    volume = float(int(rng.uniform(500_000, 5_000_000)))
+                    result[ts] = TickEvent(
+                        symbol=symbol, timestamp=ts,
+                        open=open_, high=high, low=low, close=close, volume=volume,
+                    )
+                    price = close
+                else:
+                    bar_ts     = datetime(current.year, current.month, current.day, 9, 30)
+                    market_end = datetime(current.year, current.month, current.day, 16, 0)
+                    while bar_ts < market_end:
+                        change = rng.gauss(drift, vol)
+                        open_  = price
+                        close  = round(open_ * (1 + change), 4)
+                        high   = round(max(open_, close) * (1 + abs(rng.gauss(0, wick_vol))), 4)
+                        low    = round(min(open_, close) * (1 - abs(rng.gauss(0, wick_vol))), 4)
+                        volume = float(int(rng.uniform(
+                            500_000 * vol_scale, 5_000_000 * vol_scale
+                        )))
+                        result[bar_ts] = TickEvent(
+                            symbol=symbol, timestamp=bar_ts,
+                            open=open_, high=high, low=low, close=close, volume=volume,
+                        )
+                        price  = close
+                        bar_ts += delta
             current += timedelta(days=1)
         return result
 

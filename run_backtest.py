@@ -9,7 +9,7 @@ import queue
 
 from analysis.result_writer import DefaultResultWriter
 from external.index_constituents import load_or_fetch_universe_manifest
-from external.yahoo import fetch_daily_bars
+from external.yahoo import fetch_bars
 from trading.backtester import Backtester
 from trading.impl import (
     IndexConstituentsUniverseBuilder,
@@ -61,7 +61,7 @@ data = YahooDataHandler(
     symbols,
     start=START,
     end=END,
-    fetch=fetch_daily_bars,
+    fetch=fetch_bars,
     universe_builder=universe_builder,
     bar_freq=strategy.required_freq,
 )

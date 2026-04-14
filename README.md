@@ -165,6 +165,17 @@ class MyStrategy(Strategy):
 
 `signal` is a float target weight: `> 0` = long, `0` = exit, `< 0` = short (blocked by portfolio). Weights across one bundle should sum to ≤ 1 so the strategy never over-allocates its nominal.
 
+**`bar_freq`** controls the bar resolution passed to `StrategyParams` (default `"1d"`). Supported values:
+
+| Value | Resolution | Notes |
+|---|---|---|
+| `"1d"` | Daily | Default; works with `MultiCSVDataHandler` and `YahooDataHandler` |
+| `"1h"` | Hourly | Alpaca live/paper only |
+| `"1m"` | 1-minute | Alpaca live/paper only |
+| `"Nm"` | N-minute (e.g. `"5m"`, `"15m"`) | Alpaca live/paper only; N must be a positive integer |
+
+All strategies in a `StrategyContainer` must use the same resolution class (all daily **or** all intraday). Mixing daily and intraday raises a `ValueError` from `required_freq`. When multiple intraday strategies are present, `required_freq` selects the finest resolution so coarser strategies fire every N bars automatically.
+
 Then register it in `strategy_params/params.json`:
 
 ```json

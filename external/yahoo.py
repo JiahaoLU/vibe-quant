@@ -2,15 +2,16 @@ import pandas as pd
 import yfinance as yf
 
 
-def fetch_daily_bars(symbols: list[str], start: str, end: str) -> dict[str, list[dict]]:
+def fetch_bars(symbols: list[str], start: str, end: str, bar_freq: str = "1d") -> dict[str, list[dict]]:
     """
-    Fetch daily OHLCV bars for one or more symbols from Yahoo Finance in a single request.
+    Fetch OHLCV bars for one or more symbols from Yahoo Finance in a single request.
 
     Parameters
     ----------
-    symbols : list[str]  ticker symbols, e.g. ["AAPL", "MSFT"]
-    start   : str        ISO date string, inclusive, e.g. "2020-01-01"
-    end     : str        ISO date string, exclusive, e.g. "2022-01-01"
+    symbols  : list[str]  ticker symbols, e.g. ["AAPL", "MSFT"]
+    start    : str        ISO date string, inclusive, e.g. "2020-01-01"
+    end      : str        ISO date string, exclusive, e.g. "2022-01-01"
+    bar_freq : str        bar interval passed to yfinance, e.g. "1d", "1h", "5m"
 
     Returns
     -------
@@ -21,7 +22,7 @@ def fetch_daily_bars(symbols: list[str], start: str, end: str) -> dict[str, list
     ------
     ValueError  if the response is empty or a symbol returns no data
     """
-    df = yf.download(symbols, start=start, end=end, auto_adjust=True, progress=False)
+    df = yf.download(symbols, start=start, end=end, interval=bar_freq, auto_adjust=True, progress=False)
     if df.empty:
         raise ValueError(
             f"No data returned for symbols {symbols} between {start} and {end}."

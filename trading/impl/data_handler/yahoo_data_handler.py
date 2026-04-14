@@ -31,7 +31,7 @@ class YahooDataHandler(DataHandler):
         symbols:     list[str],
         start:       str,
         end:         str,
-        fetch:       Callable[[list[str], str, str], dict[str, list[dict]]],
+        fetch:       Callable[[list[str], str, str, str], dict[str, list[dict]]],
         max_history: int = 200,
         universe_builder: UniverseBuilder | None = None,
         bar_freq:    str = "1d",
@@ -39,7 +39,7 @@ class YahooDataHandler(DataHandler):
         super().__init__(emit, bar_freq=bar_freq)
         self._symbols = symbols
 
-        all_rows = fetch(symbols, start, end)
+        all_rows = fetch(symbols, start, end, bar_freq)
         raw: dict[str, dict[datetime, TickEvent]] = {}
         all_ts: set[datetime] = set()
 

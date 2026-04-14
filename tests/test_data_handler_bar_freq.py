@@ -18,7 +18,7 @@ def test_yahoo_data_handler_exposes_bar_freq():
         symbols=["AAPL"],
         start="2020-01-01",
         end="2020-01-10",
-        fetch=lambda syms, s, e: {"AAPL": []},
+        fetch=lambda syms, s, e, freq="1d": {"AAPL": []},
         bar_freq="1d",
     )
     assert handler.bar_freq == "1d"

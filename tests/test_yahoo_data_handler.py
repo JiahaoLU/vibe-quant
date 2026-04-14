@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from external.yahoo import fetch_daily_bars
+from external.yahoo import fetch_bars
 from trading.base.universe_builder import UniverseBuilder
 from trading.impl.data_handler.yahoo_data_handler import YahooDataHandler
 from trading.events import BarBundleEvent, EventType
@@ -43,14 +43,14 @@ MSFT_ROWS = [
 
 
 # ---------------------------------------------------------------------------
-# fetch_daily_bars tests
+# fetch_bars tests
 # ---------------------------------------------------------------------------
 
-def test_fetch_daily_bars_returns_dict_of_lists():
+def test_fetch_bars_returns_dict_of_lists():
     df = _make_history_df(AAPL_ROWS)
     with patch("external.yahoo.yf.download") as mock_download:
         mock_download.return_value = df
-        result = fetch_daily_bars(["AAPL"], "2020-01-01", "2020-01-04")
+        result = fetch_bars(["AAPL"], "2020-01-01", "2020-01-04")
 
     assert "AAPL" in result
     rows = result["AAPL"]
@@ -63,12 +63,12 @@ def test_fetch_daily_bars_returns_dict_of_lists():
     assert rows[0]["volume"]    == 1_000.0
 
 
-def test_fetch_daily_bars_raises_on_empty_response():
+def test_fetch_bars_raises_on_empty_response():
     empty_df = pd.DataFrame()
     with patch("external.yahoo.yf.download") as mock_download:
         mock_download.return_value = empty_df
         with pytest.raises(ValueError):
-            fetch_daily_bars(["AAPL"], "2020-01-01", "2020-01-04")
+            fetch_bars(["AAPL"], "2020-01-01", "2020-01-04")
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ def test_fetch_daily_bars_raises_on_empty_response():
 
 def _make_fetch(data: dict[str, list[dict]]):
     """Return a fetch callable that serves pre-canned rows, or raises on unknown symbol."""
-    def fetch(symbols: list[str], start: str, end: str) -> dict[str, list[dict]]:
+    def fetch(symbols: list[str], start: str, end: str, bar_freq: str = "1d") -> dict[str, list[dict]]:
         result = {}
         for symbol in symbols:
             if symbol not in data or not data[symbol]:
