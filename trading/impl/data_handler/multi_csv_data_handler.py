@@ -35,6 +35,7 @@ class MultiCSVDataHandler(DataHandler):
         max_history: int = 200,
         date_format: str = "%Y-%m-%d",
         universe_builder: UniverseBuilder | None = None,
+        bar_freq:    str = "1d",
     ):
         if csv_paths is None and (start is None or end is None):
             raise ValueError(
@@ -45,7 +46,7 @@ class MultiCSVDataHandler(DataHandler):
                 f"symbols and csv_paths must have the same length "
                 f"(got {len(symbols)} and {len(csv_paths)})"
             )
-        super().__init__(emit)
+        super().__init__(emit, bar_freq=bar_freq)
         self._symbols = symbols
 
         raw: dict[str, dict[datetime, TickEvent]] = {}

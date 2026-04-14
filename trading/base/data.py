@@ -6,8 +6,13 @@ from ..events import Event, TickEvent
 
 
 class DataHandler(ABC):
-    def __init__(self, emit: Callable[[Event], None]):
-        self._emit = emit
+    def __init__(self, emit: Callable[[Event], None], bar_freq: str = "1d"):
+        self._emit     = emit
+        self._bar_freq = bar_freq
+
+    @property
+    def bar_freq(self) -> str:
+        return self._bar_freq
 
     @abstractmethod
     def prefill(self) -> None:

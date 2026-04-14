@@ -34,8 +34,9 @@ class YahooDataHandler(DataHandler):
         fetch:       Callable[[list[str], str, str], dict[str, list[dict]]],
         max_history: int = 200,
         universe_builder: UniverseBuilder | None = None,
+        bar_freq:    str = "1d",
     ):
-        super().__init__(emit)
+        super().__init__(emit, bar_freq=bar_freq)
         self._symbols = symbols
 
         all_rows = fetch(symbols, start, end)

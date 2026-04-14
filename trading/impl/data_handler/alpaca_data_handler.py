@@ -35,9 +35,8 @@ class AlpacaDataHandler(DataHandler):
         secret:      str,
         max_history: int = 200,
     ):
-        super().__init__(emit)
+        super().__init__(emit, bar_freq=bar_freq)
         self._symbols        = symbols
-        self._bar_freq       = bar_freq
         self._api_key        = api_key
         self._secret         = secret
         self._max_history    = max_history
