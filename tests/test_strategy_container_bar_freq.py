@@ -1,7 +1,9 @@
 # tests/test_strategy_container_bar_freq.py
 import pytest
+from datetime import datetime
 from trading.base.strategy import Strategy
 from trading.base.strategy_params import StrategyParams
+from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
 from trading.impl.strategy_signal_generator.strategy_container import StrategyContainer
 
 
@@ -49,10 +51,6 @@ def test_required_freq_raises_when_mixing_daily_and_intraday():
     container.add(_Stub, StrategyParams(symbols=["MSFT"], name="b", bar_freq="5m"))
     with pytest.raises(ValueError, match="Cannot mix"):
         _ = container.required_freq
-
-
-from datetime import datetime
-from trading.events import BarBundleEvent, SignalBundleEvent, SignalEvent, TickEvent
 
 
 def _bundle(symbols: list[str]) -> BarBundleEvent:
