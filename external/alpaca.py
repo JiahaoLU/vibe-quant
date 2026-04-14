@@ -191,6 +191,16 @@ def cancel_all_open_orders(api_key: str, secret: str, paper: bool) -> None:
         )
 
 
+def cancel_order(order_id: str, api_key: str, secret: str, paper: bool) -> None:
+    """Cancel a single open order by ID. Logs and continues on failure."""
+    client = TradingClient(api_key, secret, paper=paper)
+    try:
+        client.cancel_order_by_id(order_id)
+        logger.info("Cancelled order %s", order_id)
+    except Exception as exc:
+        logger.warning("cancel_order %s failed: %s", order_id, exc)
+
+
 @contextlib.asynccontextmanager
 async def open_fill_stream(api_key: str, secret: str, paper: bool):
     """Async context manager that yields asyncio.Queue[dict] of raw trade update dicts.

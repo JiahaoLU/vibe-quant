@@ -226,3 +226,24 @@ def test_cancel_all_open_orders_logs_warning_on_failure():
     with patch("external.alpaca.TradingClient", return_value=mock_client):
         # must not raise — failure is non-fatal
         cancel_all_open_orders(api_key="key", secret="secret", paper=True)
+
+
+def test_cancel_order_calls_client():
+    from external.alpaca import cancel_order
+
+    mock_client = MagicMock()
+
+    with patch("external.alpaca.TradingClient", return_value=mock_client):
+        cancel_order("ord-42", "key", "secret", paper=True)
+
+    mock_client.cancel_order_by_id.assert_called_once_with("ord-42")
+
+
+def test_cancel_order_logs_and_continues_on_failure():
+    from external.alpaca import cancel_order
+
+    mock_client = MagicMock()
+    mock_client.cancel_order_by_id.side_effect = RuntimeError("broker down")
+
+    with patch("external.alpaca.TradingClient", return_value=mock_client):
+        cancel_order("ord-99", "key", "secret", paper=False)

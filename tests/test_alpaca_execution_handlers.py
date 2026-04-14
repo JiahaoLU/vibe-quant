@@ -139,3 +139,74 @@ async def test_fill_stream_yields_fill_events_from_websocket():
     assert fill_event.direction == "BUY"
     assert fill_event.quantity == 10
     assert fill_event.fill_price == pytest.approx(150.50)
+
+
+def test_execute_order_cancels_existing_open_order_for_same_symbol():
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+
+    handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
+    handler._pending_orders["ord-old"] = ("AAPL", "BUY", 100)
+
+    with (
+        patch(
+            "trading.impl.live_execution_handler.alpaca_paper_execution_handler.cancel_order"
+        ) as mock_cancel,
+        patch(
+            "trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order",
+            return_value="ord-new",
+        ) as mock_submit,
+    ):
+        handler.execute_order(_order(symbol="AAPL", direction="BUY", qty=100))
+
+    mock_cancel.assert_called_once_with("ord-old", "k", "s", True)
+    mock_submit.assert_called_once()
+    assert "ord-old" not in handler._pending_orders
+    assert "ord-new" in handler._pending_orders
+
+
+def test_execute_order_does_not_cancel_order_for_different_symbol():
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+
+    handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
+    handler._pending_orders["ord-msft"] = ("MSFT", "BUY", 50)
+
+    with (
+        patch(
+            "trading.impl.live_execution_handler.alpaca_paper_execution_handler.cancel_order"
+        ) as mock_cancel,
+        patch(
+            "trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order",
+            return_value="ord-aapl",
+        ),
+    ):
+        handler.execute_order(_order(symbol="AAPL", direction="BUY", qty=100))
+
+    mock_cancel.assert_not_called()
+    assert "ord-msft" in handler._pending_orders
+    assert "ord-aapl" in handler._pending_orders
+
+
+def test_execute_order_stale_order_removed_when_cancel_swallows_broker_error():
+    # Real production path: cancel_order swallows the broker error internally and
+    # returns normally. The stale order must still be removed from _pending_orders
+    # and the new order must be submitted.
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+
+    handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
+    handler._pending_orders["ord-old"] = ("AAPL", "BUY", 100)
+
+    with (
+        patch(
+            "trading.impl.live_execution_handler.alpaca_paper_execution_handler.cancel_order",
+            return_value=None,  # broker error was swallowed inside cancel_order
+        ),
+        patch(
+            "trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order",
+            return_value="ord-new",
+        ) as mock_submit,
+    ):
+        handler.execute_order(_order(symbol="AAPL", direction="BUY", qty=100))
+
+    mock_submit.assert_called_once()
+    assert "ord-old" not in handler._pending_orders
+    assert "ord-new" in handler._pending_orders

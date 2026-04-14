@@ -7,7 +7,13 @@ from typing import Callable
 
 from ...base.live.execution import LiveExecutionHandler
 from ...events import Event, FillEvent, OrderEvent
-from external.alpaca import TERMINAL_ORDER_STATUSES, get_order_status, open_fill_stream, submit_order
+from external.alpaca import (
+    TERMINAL_ORDER_STATUSES,
+    cancel_order,
+    get_order_status,
+    open_fill_stream,
+    submit_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +40,19 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
                 direction="HOLD", quantity=0, fill_price=0.0, commission=0.0,
             ))
             return
+
+        # Keep at most one broker order open per symbol. If a prior order is
+        # still pending when a fresh target arrives, drop it before reordering.
+        for order_id, (symbol, _direction, _qty) in list(self._pending_orders.items()):
+            if symbol != event.symbol:
+                continue
+            try:
+                cancel_order(order_id, self._api_key, self._secret, self._PAPER)
+            except Exception as exc:
+                logger.warning("Failed cancelling stale order %s for %s: %s", order_id, symbol, exc)
+            finally:
+                self._pending_orders.pop(order_id, None)
+
         order_id = submit_order(
             symbol=event.symbol,
             direction=event.direction,
