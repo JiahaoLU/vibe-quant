@@ -28,7 +28,6 @@ from trading.impl import (
 
 # --- Configuration -----------------------------------------------------------
 MODE               = "paper"            # "paper" | "live"
-BAR_FREQ           = "1d"               # "1d" for daily, "5m" for 5-minute intraday
 STRATEGY_PARAMS_DIR = "strategy_params"
 INITIAL_CAPITAL    = 10_000.0
 MAX_LEVERAGE       = 1.0
@@ -53,7 +52,7 @@ symbols = strategy.symbols
 data = AlpacaDataHandler(
     emit     = events.put,
     symbols  = symbols,
-    bar_freq = BAR_FREQ,
+    bar_freq = strategy.required_freq,
     api_key  = API_KEY,
     secret   = SECRET,
 )

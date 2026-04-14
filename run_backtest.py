@@ -63,6 +63,7 @@ data = YahooDataHandler(
     end=END,
     fetch=fetch_daily_bars,
     universe_builder=universe_builder,
+    bar_freq=strategy.required_freq,
 )
 portfolio = SimplePortfolio(
     events.put, data.get_latest_bars, symbols,
