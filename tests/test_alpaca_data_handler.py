@@ -324,13 +324,13 @@ def test_prefill_propagates_api_exception():
 
 
 def test_update_bars_async_sets_is_end_of_day_true_for_daily_bar():
-    """Daily bars always have is_end_of_day=True."""
+    """Daily bars explicitly pass is_end_of_day=True to BarBundleEvent constructor."""
     from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
+    from trading.events import BarBundleEvent
     from datetime import timezone
 
-    collected = []
     handler = AlpacaDataHandler(
-        emit=collected.append, symbols=["AAPL"], bar_freq="1d",
+        emit=MagicMock(), symbols=["AAPL"], bar_freq="1d",
         api_key="key", secret="secret",
     )
     raw = {
@@ -339,13 +339,22 @@ def test_update_bars_async_sets_is_end_of_day_true_for_daily_bar():
             "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000.0,
         }
     }
+    construct_calls = []
+    real_BarBundleEvent = BarBundleEvent
+
+    def spy_bundle(*args, **kwargs):
+        construct_calls.append(kwargs)
+        return real_BarBundleEvent(*args, **kwargs)
+
     with (
         patch("trading.impl.data_handler.alpaca_data_handler.fetch_bars", return_value=raw),
         patch.object(handler, "_seconds_until_next_bar", return_value=0.0),
+        patch("trading.impl.data_handler.alpaca_data_handler.BarBundleEvent", side_effect=spy_bundle),
     ):
         asyncio.run(handler.update_bars_async())
 
-    assert collected[0].is_end_of_day is True
+    assert len(construct_calls) == 1
+    assert construct_calls[0].get("is_end_of_day") is True
 
 
 def test_update_bars_async_sets_is_end_of_day_true_for_last_intraday_bar():
