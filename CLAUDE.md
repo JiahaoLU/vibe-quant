@@ -72,7 +72,7 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 | `trading/impl/risk_guard/risk_guard.py` | Injected into `SimplePortfolio`; enforces daily loss limit and per-symbol position cap before each rebalance. |
 | `external/alpaca.py` | Thin wrappers around the `alpaca-py` SDK used by all Alpaca implementations. |
 | `run_backtest.py` | Backtest wiring point. All backtest configuration constants live here. |
-| `run_live.py` | Live/paper trading wiring point. Set `MODE`, `BAR_FREQ`, risk limits, and credentials here. |
+| `run_live.py` | Live/paper trading wiring point. Set `MODE`, risk limits, and credentials here. Bar frequency is derived from `strategy.required_freq`. |
 | `plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |
 
 ## CSV data format
