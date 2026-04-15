@@ -242,3 +242,132 @@ async def test_runner_skips_reset_day_when_no_risk_guard():
     # No risk_guard argument — must complete without AttributeError
     runner = LiveRunner(events, data, MagicMock(), portfolio, execution, reconciler)
     await runner.run()  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_trade_logger_open_and_close_session_called():
+    from trading.live_runner import LiveRunner
+    from unittest.mock import MagicMock
+
+    events = queue.Queue()
+    data = MagicMock()
+    data.update_bars_async = AsyncMock(return_value=False)
+    strategy = MagicMock()
+    strategy.strategy_ids = ["strat_a"]
+    portfolio = MagicMock()
+    execution = MagicMock()
+    execution.fill_stream = _null_fill_stream
+    reconciler = MagicMock()
+    reconciler.hydrate = AsyncMock()
+    trade_logger = MagicMock()
+
+    runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler,
+                        trade_logger=trade_logger, mode="paper")
+    await runner.run()
+
+    trade_logger.open_session.assert_called_once()
+    session_id, mode, strategy_names = trade_logger.open_session.call_args[0]
+    assert mode == "paper"
+    assert strategy_names == ["strat_a"]
+    # session_id must be a non-empty string (UUID)
+    assert isinstance(session_id, str) and len(session_id) > 0
+
+    trade_logger.close_session.assert_called_once_with(session_id)
+
+
+@pytest.mark.asyncio
+async def test_trade_logger_logs_strategy_bundle():
+    from trading.live_runner import LiveRunner
+    from trading.events import SignalEvent
+
+    ts = datetime(2024, 1, 2, 16, 5)
+    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=0.8)
+    bundle = StrategyBundleEvent(
+        timestamp=ts,
+        combined={"AAPL": sig},
+        per_strategy={"strat_a": {"AAPL": 1.0}},
+    )
+
+    events = queue.Queue()
+    events.put(bundle)
+
+    data = MagicMock()
+    call_count = 0
+    async def _update():
+        nonlocal call_count
+        call_count += 1
+        return call_count == 1
+    data.update_bars_async = _update
+
+    strategy = MagicMock()
+    strategy.strategy_ids = []
+    portfolio = MagicMock()
+    execution = MagicMock()
+    execution.fill_stream = _null_fill_stream
+    reconciler = MagicMock()
+    reconciler.hydrate = AsyncMock()
+    trade_logger = MagicMock()
+
+    runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler,
+                        trade_logger=trade_logger, mode="paper")
+    await runner.run()
+
+    trade_logger.log_signal.assert_called_once()
+    assert trade_logger.log_signal.call_args[0][1] is bundle
+
+
+@pytest.mark.asyncio
+async def test_trade_logger_logs_order_but_not_hold():
+    from trading.live_runner import LiveRunner
+
+    ts = datetime(2024, 1, 2, 16, 5)
+    buy_order = OrderEvent(symbol="AAPL", timestamp=ts, order_type="MARKET",
+                           direction="BUY", quantity=5, order_id="oid-1")
+    hold_order = OrderEvent(symbol="", timestamp=ts, order_type="MARKET",
+                            direction="HOLD", quantity=0)
+
+    events = queue.Queue()
+    events.put(buy_order)
+    events.put(hold_order)
+
+    data = MagicMock()
+    call_count = 0
+    async def _update():
+        nonlocal call_count
+        call_count += 1
+        return call_count == 1
+    data.update_bars_async = _update
+
+    strategy = MagicMock()
+    strategy.strategy_ids = []
+    portfolio = MagicMock()
+    execution = MagicMock()
+    execution.fill_stream = _null_fill_stream
+    reconciler = MagicMock()
+    reconciler.hydrate = AsyncMock()
+    trade_logger = MagicMock()
+
+    runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler,
+                        trade_logger=trade_logger, mode="paper")
+    await runner.run()
+
+    trade_logger.log_order.assert_called_once()
+    assert trade_logger.log_order.call_args[0][1] is buy_order
+
+
+@pytest.mark.asyncio
+async def test_trade_logger_is_optional():
+    from trading.live_runner import LiveRunner
+
+    events = queue.Queue()
+    data = MagicMock()
+    data.update_bars_async = AsyncMock(return_value=False)
+    portfolio = MagicMock()
+    execution = MagicMock()
+    execution.fill_stream = _null_fill_stream
+    reconciler = MagicMock()
+    reconciler.hydrate = AsyncMock()
+
+    # No trade_logger — must not raise
+    runner = LiveRunner(events, data, MagicMock(), portfolio, execution, reconciler)
+    await runner.run()
