@@ -125,6 +125,11 @@ class StrategyContainer(StrategySignalGenerator):
         minutes = [_bar_freq_to_minutes(f) for f in intraday]
         return f"{_base_fetch_minutes(minutes)}m"
 
+    @property
+    def strategy_ids(self) -> list[str]:
+        """IDs of all registered strategies."""
+        return list(self._ids)
+
     def _recompute_steps(self) -> None:
         """Recompute the per-strategy bar step counts and EOD-gate flags based on required_freq.
 

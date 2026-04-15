@@ -27,6 +27,12 @@ class StrategySignalGenerator(StrategyBase):
         """The finest bar_freq needed across all contained strategies."""
         ...
 
+    @property
+    @abstractmethod
+    def strategy_ids(self) -> list[str]:
+        """IDs of all registered strategies."""
+        ...
+
     @abstractmethod
     def emit(self, event: Event) -> None:
         """Emit an event downstream."""

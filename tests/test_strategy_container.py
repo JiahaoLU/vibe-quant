@@ -326,3 +326,23 @@ def test_add_raises_on_duplicate_strategy_id():
     container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="alpha"))
     with pytest.raises(ValueError, match="alpha"):
         container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="alpha"))
+
+
+def test_strategy_container_strategy_ids_returns_registered_names():
+    container = StrategyContainer(lambda e: None, lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="my_strat"))
+
+    assert container.strategy_ids == ["my_strat"]
+
+
+def test_strategy_container_strategy_ids_empty_when_no_strategies_added():
+    container = StrategyContainer(lambda e: None, lambda s, n: [])
+    assert container.strategy_ids == []
+
+
+def test_strategy_container_strategy_ids_multiple_strategies():
+    container = StrategyContainer(lambda e: None, lambda s, n: [])
+    container.add(_AlwaysLong, StrategyParams(symbols=["AAPL"], name="strat_a"))
+    container.add(_NeverSignals, StrategyParams(symbols=["MSFT"], name="strat_b"))
+
+    assert container.strategy_ids == ["strat_a", "strat_b"]
