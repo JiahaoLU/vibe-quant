@@ -29,8 +29,8 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
         super().__init__(emit)
         self._api_key = api_key
         self._secret  = secret
-        # order_id → (symbol, direction, quantity)
-        self._pending_orders: dict[str, tuple[str, str, int]] = {}
+        # broker_order_id → (symbol, direction, quantity, client_order_id)
+        self._pending_orders: dict[str, tuple[str, str, int, str]] = {}
         self._filled_order_ids: set[str] = set()
 
     def execute_order(self, event: OrderEvent) -> None:
@@ -43,7 +43,7 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
 
         # Keep at most one broker order open per symbol. If a prior order is
         # still pending when a fresh target arrives, drop it before reordering.
-        for order_id, (symbol, _direction, _qty) in list(self._pending_orders.items()):
+        for order_id, (symbol, _direction, _qty, _coid) in list(self._pending_orders.items()):
             if symbol != event.symbol:
                 continue
             try:
@@ -60,8 +60,9 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
             api_key=self._api_key,
             secret=self._secret,
             paper=self._PAPER,
+            client_order_id=event.order_id,
         )
-        self._pending_orders[order_id] = (event.symbol, event.direction, event.quantity)
+        self._pending_orders[order_id] = (event.symbol, event.direction, event.quantity, event.order_id)
 
     @asynccontextmanager
     async def fill_stream(self):
@@ -72,7 +73,7 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
             while True:
                 data = await ws_q.get()
                 fill = self._translate(data)
-                if fill and fill.symbol and fill.symbol in {s for s, _, _ in self._pending_orders.values()}:
+                if fill and fill.symbol and fill.symbol in {s for s, _, _, _ in self._pending_orders.values()}:
                     self._filled_order_ids.add(str(data.order.id))
                     self._pending_orders.pop(str(data.order.id), None)
                     await fill_q.put(fill)
@@ -80,7 +81,7 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
         async def _poll_fallback():
             while True:
                 await asyncio.sleep(_POLL_INTERVAL)
-                for order_id, (symbol, direction, qty) in list(self._pending_orders.items()):
+                for order_id, (symbol, direction, qty, client_order_id) in list(self._pending_orders.items()):
                     if order_id in self._filled_order_ids:
                         continue
                     status = get_order_status(order_id, self._api_key, self._secret, self._PAPER)
@@ -95,6 +96,7 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
                             quantity=status["filled_qty"],
                             fill_price=status["filled_avg_price"],
                             commission=0.0,
+                            order_id=client_order_id,
                         )
                         self._filled_order_ids.add(order_id)
                         self._pending_orders.pop(order_id, None)
@@ -124,12 +126,13 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
             order     = data.order
             direction = "BUY" if str(order.side) == "buy" else "SELL"
             return FillEvent(
-                symbol    = order.symbol,
-                timestamp = datetime.now(timezone.utc),
-                direction = direction,
-                quantity  = int(float(order.filled_qty or 0)),
-                fill_price= float(order.filled_avg_price or 0.0),
-                commission= 0.0,
+                symbol     = order.symbol,
+                timestamp  = datetime.now(timezone.utc),
+                direction  = direction,
+                quantity   = int(float(order.filled_qty or 0)),
+                fill_price = float(order.filled_avg_price or 0.0),
+                commission = 0.0,
+                order_id   = str(order.client_order_id or ""),
             )
         except Exception as exc:
             logger.warning("Failed to translate fill: %s", exc)

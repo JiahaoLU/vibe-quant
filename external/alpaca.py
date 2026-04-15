@@ -121,18 +121,20 @@ def submit_order(
     api_key: str,
     secret: str,
     paper: bool,
+    client_order_id: str = "",
 ) -> str:
     """Submit a market order. Returns the broker order ID."""
     client = TradingClient(api_key, secret, paper=paper)
     side = OrderSide.BUY if direction == "BUY" else OrderSide.SELL
-    order = client.submit_order(
-        MarketOrderRequest(
-            symbol=symbol,
-            qty=quantity,
-            side=side,
-            time_in_force=TimeInForce.DAY,
-        )
+    req = MarketOrderRequest(
+        symbol=symbol,
+        qty=quantity,
+        side=side,
+        time_in_force=TimeInForce.DAY,
     )
+    if client_order_id:
+        req.client_order_id = client_order_id
+    order = client.submit_order(req)
     return str(order.id)
 
 

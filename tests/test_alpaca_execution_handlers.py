@@ -34,6 +34,7 @@ def test_paper_execute_order_calls_submit_order():
     mock_sub.assert_called_once_with(
         symbol="AAPL", direction="BUY", quantity=10,
         api_key="key", secret="secret", paper=True,
+        client_order_id="",
     )
     assert "ord-1" in handler._pending_orders
 
@@ -54,6 +55,7 @@ def test_live_execute_order_calls_submit_order_with_paper_false():
     mock_sub.assert_called_once_with(
         symbol="AAPL", direction="SELL", quantity=10,
         api_key="key", secret="secret", paper=False,
+        client_order_id="",
     )
 
 
@@ -86,7 +88,7 @@ async def test_poll_fallback_clears_terminal_orders(terminal_status):
 
     collected = []
     handler = AlpacaPaperExecutionHandler(emit=collected.append, api_key="k", secret="s")
-    handler._pending_orders["ord-99"] = ("AAPL", "BUY", 5)
+    handler._pending_orders["ord-99"] = ("AAPL", "BUY", 5, "")
 
     status_payload = {"status": terminal_status, "filled_qty": 0, "filled_avg_price": 0.0}
 
@@ -128,7 +130,7 @@ async def test_fill_stream_yields_fill_events_from_websocket():
         yield ws_queue
 
     handler = AlpacaPaperExecutionHandler(emit=MagicMock(), api_key="k", secret="s")
-    handler._pending_orders["ord-1"] = ("AAPL", "BUY", 10)
+    handler._pending_orders["ord-1"] = ("AAPL", "BUY", 10, "")
 
     with patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.open_fill_stream", _mock_stream):
         async with handler.fill_stream() as fill_q:
@@ -145,7 +147,7 @@ def test_execute_order_cancels_existing_open_order_for_same_symbol():
     from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
 
     handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
-    handler._pending_orders["ord-old"] = ("AAPL", "BUY", 100)
+    handler._pending_orders["ord-old"] = ("AAPL", "BUY", 100, "")
 
     with (
         patch(
@@ -168,7 +170,7 @@ def test_execute_order_does_not_cancel_order_for_different_symbol():
     from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
 
     handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
-    handler._pending_orders["ord-msft"] = ("MSFT", "BUY", 50)
+    handler._pending_orders["ord-msft"] = ("MSFT", "BUY", 50, "")
 
     with (
         patch(
@@ -193,7 +195,7 @@ def test_execute_order_stale_order_removed_when_cancel_swallows_broker_error():
     from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
 
     handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
-    handler._pending_orders["ord-old"] = ("AAPL", "BUY", 100)
+    handler._pending_orders["ord-old"] = ("AAPL", "BUY", 100, "")
 
     with (
         patch(
@@ -210,3 +212,91 @@ def test_execute_order_stale_order_removed_when_cancel_swallows_broker_error():
     mock_submit.assert_called_once()
     assert "ord-old" not in handler._pending_orders
     assert "ord-new" in handler._pending_orders
+
+
+def test_execute_order_passes_client_order_id_to_submit():
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+
+    order = OrderEvent(
+        symbol="AAPL", timestamp=datetime(2024, 1, 2),
+        order_type="MARKET", direction="BUY", quantity=10,
+        order_id="my-uuid-123",
+    )
+    handler = AlpacaPaperExecutionHandler(emit=lambda e: None, api_key="k", secret="s")
+    with patch(
+        "trading.impl.live_execution_handler.alpaca_paper_execution_handler.submit_order",
+        return_value="broker-ord-1",
+    ) as mock_sub:
+        handler.execute_order(order)
+
+    mock_sub.assert_called_once_with(
+        symbol="AAPL", direction="BUY", quantity=10,
+        api_key="k", secret="s", paper=True,
+        client_order_id="my-uuid-123",
+    )
+
+
+@pytest.mark.asyncio
+async def test_fill_stream_ws_echoes_client_order_id_in_fill():
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+    from contextlib import asynccontextmanager
+
+    raw_fill = MagicMock()
+    raw_fill.event = MagicMock()
+    raw_fill.event.__str__ = lambda s: "fill"
+    raw_fill.order = MagicMock()
+    raw_fill.order.id = "broker-ord-1"
+    raw_fill.order.client_order_id = "my-uuid-123"
+    raw_fill.order.symbol = "AAPL"
+    raw_fill.order.side = MagicMock()
+    raw_fill.order.side.__str__ = lambda s: "buy"
+    raw_fill.order.filled_qty = "10"
+    raw_fill.order.filled_avg_price = "150.50"
+
+    ws_queue = asyncio.Queue()
+    await ws_queue.put(raw_fill)
+
+    @asynccontextmanager
+    async def _mock_stream(*args, **kwargs):
+        yield ws_queue
+
+    handler = AlpacaPaperExecutionHandler(emit=MagicMock(), api_key="k", secret="s")
+    handler._pending_orders["broker-ord-1"] = ("AAPL", "BUY", 10, "my-uuid-123")
+
+    with patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.open_fill_stream", _mock_stream):
+        async with handler.fill_stream() as fill_q:
+            fill_event = await asyncio.wait_for(fill_q.get(), timeout=1.0)
+
+    assert fill_event.order_id == "my-uuid-123"
+
+
+@pytest.mark.asyncio
+async def test_poll_fallback_echoes_client_order_id_in_fill():
+    from trading.impl.live_execution_handler.alpaca_paper_execution_handler import AlpacaPaperExecutionHandler
+    from contextlib import asynccontextmanager
+
+    ws_queue = asyncio.Queue()
+
+    @asynccontextmanager
+    async def _mock_stream(*args, **kwargs):
+        yield ws_queue
+
+    collected = []
+    handler = AlpacaPaperExecutionHandler(emit=collected.append, api_key="k", secret="s")
+    handler._pending_orders["broker-ord-1"] = ("AAPL", "BUY", 5, "my-uuid-456")
+
+    status_payload = {
+        "status": "filled",
+        "filled_qty": 5,
+        "filled_avg_price": 150.0,
+    }
+
+    with (
+        patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.open_fill_stream", _mock_stream),
+        patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler.get_order_status", return_value=status_payload),
+        patch("trading.impl.live_execution_handler.alpaca_paper_execution_handler._POLL_INTERVAL", 0.05),
+    ):
+        async with handler.fill_stream() as fill_q:
+            fill_event = await asyncio.wait_for(fill_q.get(), timeout=1.0)
+
+    assert fill_event.order_id == "my-uuid-456"
