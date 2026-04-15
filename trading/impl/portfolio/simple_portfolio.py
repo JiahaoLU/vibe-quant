@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Callable
 
@@ -121,6 +122,7 @@ class SimplePortfolio(Portfolio):
             order_type="MARKET",
             direction=direction,
             quantity=qty,
+            order_id=str(uuid.uuid4()) if direction != "HOLD" else "",
         )
         if bar:
             order.reference_price  = bar.open

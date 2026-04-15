@@ -1,4 +1,5 @@
 import pytest
+import re
 from datetime import datetime
 
 from trading.impl.portfolio.simple_portfolio import SimplePortfolio
@@ -562,3 +563,44 @@ def test_signal_for_delisted_symbol_is_ignored():
 
     buy_orders = [order for order in collected if isinstance(order, OrderEvent) and order.direction == "BUY"]
     assert len(buy_orders) == 0
+
+
+_UUID4_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+)
+
+
+def test_emit_order_sets_uuid4_order_id():
+    """Every non-HOLD order emitted by the portfolio carries a valid UUID4 order_id."""
+    collected = []
+    ts = datetime(2020, 1, 3)
+    tick = TickEvent(symbol="AAPL", timestamp=ts, open=100.0, high=100.0,
+                     low=100.0, close=100.0, volume=1000.0)
+    bar = BarBundleEvent(timestamp=ts, bars={"AAPL": tick})
+
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+    sig = SignalEvent(symbol="AAPL", timestamp=ts, signal=1.0)
+    bundle = StrategyBundleEvent(timestamp=ts, combined={"AAPL": sig}, per_strategy={"s": {"AAPL": 1.0}})
+    portfolio.on_signal(bundle)
+    portfolio.fill_pending_orders(bar)
+
+    orders = [e for e in collected if hasattr(e, "direction") and e.direction != "HOLD"]
+    assert len(orders) == 1
+    assert _UUID4_RE.match(orders[0].order_id), f"Expected UUID4, got: {orders[0].order_id!r}"
+
+
+def test_hold_order_has_empty_order_id():
+    """HOLD orders get an empty order_id."""
+    collected = []
+    ts = datetime(2020, 1, 3)
+    tick = TickEvent(symbol="AAPL", timestamp=ts, open=100.0, high=100.0,
+                     low=100.0, close=100.0, volume=1000.0)
+    bar = BarBundleEvent(timestamp=ts, bars={"AAPL": tick})
+
+    portfolio = SimplePortfolio(collected.append, _get_bars({"AAPL": 100.0}), ["AAPL"], initial_capital=10_000.0)
+    # No signal → HOLD order emitted
+    portfolio.fill_pending_orders(bar)
+
+    holds = [e for e in collected if hasattr(e, "direction") and e.direction == "HOLD"]
+    assert len(holds) == 1
+    assert holds[0].order_id == ""
