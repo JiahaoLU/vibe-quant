@@ -227,10 +227,14 @@ class MultiCSVDataHandler(DataHandler):
             return False
         ts, bars = self._merged[self._index]
         self._index += 1
+        is_eod = (
+            self._index >= len(self._merged)
+            or self._merged[self._index][0].date() != ts.date()
+        )
         for symbol, bar in bars.items():
             if not bar.is_synthetic:
                 self._history[symbol].append(bar)
-        self._emit(BarBundleEvent(timestamp=ts, bars=bars))
+        self._emit(BarBundleEvent(timestamp=ts, bars=bars, is_end_of_day=is_eod))
         return True
 
     def get_latest_bars(self, symbol: str, n: int = 1) -> list[TickEvent]:

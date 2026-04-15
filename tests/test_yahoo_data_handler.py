@@ -233,3 +233,56 @@ def test_handler_without_universe_builder_unchanged():
     while handler.update_bars():
         pass
     assert all(not bar.is_delisted for bundle in collected for bar in bundle.bars.values())
+
+
+def test_update_bars_daily_bars_always_end_of_day():
+    """Every daily bar emitted by YahooDataHandler has is_end_of_day=True."""
+    rows = {
+        "AAPL": [
+            {"timestamp": datetime(2020, 1, 2), "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 1000.0},
+            {"timestamp": datetime(2020, 1, 3), "open": 101.0, "high": 102.0, "low": 100.0, "close": 101.5, "volume": 1100.0},
+        ]
+    }
+    collected = []
+    handler = YahooDataHandler(
+        emit=collected.append,
+        symbols=["AAPL"],
+        start="2020-01-01",
+        end="2020-01-04",
+        fetch=lambda syms, start, end, freq: rows,
+        bar_freq="1d",
+    )
+    while handler.update_bars():
+        pass
+
+    assert all(e.is_end_of_day for e in collected)
+
+
+def test_update_bars_intraday_only_last_bar_of_day_is_eod():
+    """For intraday data, only the last bar in each calendar day has is_end_of_day=True."""
+    rows = {
+        "AAPL": [
+            # Day 1: three 5m bars
+            {"timestamp": datetime(2020, 1, 2, 9, 30), "open": 100.0, "high": 100.5, "low": 99.5, "close": 100.2, "volume": 100.0},
+            {"timestamp": datetime(2020, 1, 2, 9, 35), "open": 100.2, "high": 100.8, "low": 100.0, "close": 100.5, "volume": 110.0},
+            {"timestamp": datetime(2020, 1, 2, 9, 40), "open": 100.5, "high": 101.0, "low": 100.3, "close": 100.9, "volume": 120.0},
+            # Day 2: two 5m bars
+            {"timestamp": datetime(2020, 1, 3, 9, 30), "open": 101.0, "high": 101.5, "low": 100.8, "close": 101.2, "volume": 130.0},
+            {"timestamp": datetime(2020, 1, 3, 9, 35), "open": 101.2, "high": 101.8, "low": 101.0, "close": 101.5, "volume": 140.0},
+        ]
+    }
+    collected = []
+    handler = YahooDataHandler(
+        emit=collected.append,
+        symbols=["AAPL"],
+        start="2020-01-01",
+        end="2020-01-04",
+        fetch=lambda syms, start, end, freq: rows,
+        bar_freq="5m",
+    )
+    while handler.update_bars():
+        pass
+
+    eod_flags = [e.is_end_of_day for e in collected]
+    # 5 bars total: [False, False, True, False, True]
+    assert eod_flags == [False, False, True, False, True]
