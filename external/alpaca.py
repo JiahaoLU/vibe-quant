@@ -53,7 +53,11 @@ def fetch_bars(
         start=start,
         end=end,
     )
-    bar_set = client.get_stock_bars(request)
+    try:
+        bar_set = client.get_stock_bars(request)
+    except Exception as exc:
+        logger.error("fetch_bars failed for %s: %s", symbols, exc)
+        raise
     result = {}
     for symbol in symbols:
         bars = bar_set[symbol]
@@ -91,7 +95,11 @@ def fetch_bars_history(
         start=start,
         end=end,
     )
-    bar_set = client.get_stock_bars(request)
+    try:
+        bar_set = client.get_stock_bars(request)
+    except Exception as exc:
+        logger.error("fetch_bars_history failed for %s: %s", symbols, exc)
+        raise
     result = {}
     for symbol in symbols:
         bars = bar_set[symbol]
@@ -134,21 +142,33 @@ def submit_order(
     )
     if client_order_id:
         req.client_order_id = client_order_id
-    order = client.submit_order(req)
+    try:
+        order = client.submit_order(req)
+    except Exception as exc:
+        logger.error("submit_order failed for %s %s x%s: %s", direction, symbol, quantity, exc)
+        raise
     return str(order.id)
 
 
 def get_positions(api_key: str, secret: str, paper: bool) -> dict[str, int]:
     """Return current positions as {symbol: quantity}."""
     client = TradingClient(api_key, secret, paper=paper)
-    positions = client.get_all_positions()
+    try:
+        positions = client.get_all_positions()
+    except Exception as exc:
+        logger.error("get_positions failed: %s", exc)
+        raise
     return {p.symbol: int(float(p.qty)) for p in positions}
 
 
 def get_account(api_key: str, secret: str, paper: bool) -> float:
     """Return available cash balance."""
     client = TradingClient(api_key, secret, paper=paper)
-    account = client.get_account()
+    try:
+        account = client.get_account()
+    except Exception as exc:
+        logger.error("get_account failed: %s", exc)
+        raise
     return float(account.cash)
 
 

@@ -37,7 +37,7 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 1. Create `trading/impl/my_strategy.py`; subclass `Strategy` from `trading.base.strategy`
 2. Implement `calculate_signals(self, event: BarBundleEvent) -> SignalBundleEvent | None` — return a `SignalBundleEvent` when signals fire, `None` otherwise
-3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file; set `nominal` to the cash amount this strategy should control — this is its weight relative to other strategies in the same `StrategyContainer` (default `1.0` gives equal weight).  `get_bars` is injected by `StrategyContainer` automatically — do **not** override `__init__`
+3. Define a `StrategyParams` subclass (e.g. `MyStrategyParams`) in the same file; set `nominal` to the cash amount this strategy should control — this is its weight relative to other strategies in the same `StrategyContainer` (default `1.0` gives equal weight). Set `bar_freq` to the desired bar resolution (e.g. `"1d"`, `"5m"`) — defaults to `"1d"`. `get_bars` is injected by `StrategyContainer` automatically — do **not** override `__init__`
 4. Implement `_init(self, strategy_params: StrategyParams)` — extract strategy-specific config here; symbols are available as `self.symbols`
 5. Call `self.get_bars(symbol, n)` to retrieve bar history — no DataHandler import needed
 6. **Return** the bundle from `calculate_signals`; `Strategy` has no `emit` — `StrategyContainer` calls `calculate_signals` directly and aggregates results before emitting
@@ -71,6 +71,7 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 | `trading/live_runner.py` | asyncio event loop for live trading; reconciles on startup, drains fill stream, handles SIGINT/SIGTERM. Sits at the `trading/` level (not under `impl/`) because it owns the top-level live loop. |
 | `trading/impl/risk_guard/risk_guard.py` | Injected into `SimplePortfolio`; enforces daily loss limit and per-symbol position cap before each rebalance. |
 | `external/alpaca.py` | Thin wrappers around the `alpaca-py` SDK used by all Alpaca implementations. |
+| `trading/logging_config.py` | Call `configure_logging()` once at startup; configures rotating file handler under `logs/` and console handler for all modules. |
 | `run_backtest.py` | Backtest wiring point. All backtest configuration constants live here. |
 | `run_live.py` | Live/paper trading wiring point. Set `MODE`, risk limits, and credentials here. Bar frequency is derived from `strategy.required_freq`. |
 | `plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |

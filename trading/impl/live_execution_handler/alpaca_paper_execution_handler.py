@@ -46,12 +46,10 @@ class AlpacaPaperExecutionHandler(LiveExecutionHandler):
         for order_id, (symbol, _direction, _qty, _coid) in list(self._pending_orders.items()):
             if symbol != event.symbol:
                 continue
-            try:
+            status = get_order_status(order_id, self._api_key, self._secret, self._PAPER)
+            if status and status["status"] not in TERMINAL_ORDER_STATUSES:
                 cancel_order(order_id, self._api_key, self._secret, self._PAPER)
-            except Exception as exc:
-                logger.warning("Failed cancelling stale order %s for %s: %s", order_id, symbol, exc)
-            finally:
-                self._pending_orders.pop(order_id, None)
+            self._pending_orders.pop(order_id, None)
 
         order_id = submit_order(
             symbol=event.symbol,

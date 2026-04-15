@@ -21,19 +21,20 @@ DataHandler → BarBundleEvent → StrategyContainer → SignalBundleEvent → [
 | `Backtester` | `trading/backtester.py` | Owns the event queue; drives the main (backtest) loop |
 | `LiveRunner` | `trading/live_runner.py` | asyncio loop; reconciles positions on startup, drains fill stream, handles graceful shutdown |
 | `PositionReconciler` | `trading/impl/position_reconciler/alpaca_reconciler.py` | Queries broker on startup and calls `portfolio.restore(holdings, cash)` |
+| `TradeLogger` | `trading/impl/trade_logger/sqlite_trade_logger.py` | Persists every signal, order, and fill to SQLite for audit and post-trade analysis |
 
 ### Event types
 
 ```
-BarBundleEvent    timestamp, bars: dict[symbol → TickEvent]
+BarBundleEvent    timestamp, bars: dict[symbol → TickEvent], is_end_of_day: bool (False for intraday bars; True on the last bar of each trading day)
 SignalBundleEvent timestamp, signals: dict[symbol → SignalEvent]
 SignalEvent       symbol, timestamp, signal: float  [value type, not queued]
                     signal > 0  long  (fraction of nominal allocated to this symbol)
                     signal = 0  exit / flat
                     signal < 0  short (clamped to 0 by SimplePortfolio — no shorts)
                     sum of signals across one bundle should be ≤ 1
-OrderEvent        timestamp, symbol, order_type, direction (BUY | SELL), quantity, reference_price
-FillEvent         timestamp, symbol, direction, quantity, fill_price, commission
+OrderEvent        timestamp, symbol, order_type, direction (BUY | SELL), quantity, reference_price, order_id (UUID4 client order ID)
+FillEvent         timestamp, symbol, direction, quantity, fill_price, commission, order_id (echoed from client_order_id)
 ```
 
 ## Quickstart
@@ -99,11 +100,12 @@ Key configuration constants at the top of `run_live.py`:
 
 ```python
 MODE               = "paper"   # "paper" | "live"
-BAR_FREQ           = "1d"      # "1d" daily; "5m" intraday
 INITIAL_CAPITAL    = 10_000.0
 MAX_DAILY_LOSS_PCT = 0.05      # halt if equity drops 5% from day open
 MAX_POSITION_PCT   = 0.20      # cap any single position at 20% of equity
 ```
+
+Bar frequency is derived automatically from `strategy.required_freq` — set `bar_freq` on each strategy's `StrategyParams` instead.
 
 On startup `LiveRunner` calls `AlpacaReconciler.hydrate()` which syncs broker positions into the portfolio before the first bar arrives. On SIGINT/SIGTERM it drains any in-flight fills and shuts down cleanly.
 
@@ -203,7 +205,8 @@ And create `strategy_params/my_strategy.json`:
 │   │   └── live/
 │   │       ├── risk_guard.py           # RiskGuard ABC
 │   │       ├── reconciler.py           # PositionReconciler ABC
-│   │       └── runner.py               # LiveRunner ABC
+│   │       ├── runner.py               # LiveRunner ABC
+│   │       └── trade_logger.py         # TradeLogger ABC
 │   ├── impl/
 │   │   ├── data_handler/
 │   │   │   ├── alpaca_data_handler.py          # Alpaca live data handler (async bar streaming)
@@ -224,11 +227,15 @@ And create `strategy_params/my_strategy.json`:
 │   │   │   └── json_strategy_params_loader.py  # Registry-based JSON loader
 │   │   ├── strategy_signal_generator/
 │   │   │   └── strategy_container.py           # Holds + dispatches to strategies
+│   │   ├── trade_logger/
+│   │   │   └── sqlite_trade_logger.py          # SQLite-backed trade audit log
 │   │   └── universe_builder/
 │   │       └── index_constituents_universe_builder.py
 │   ├── events.py                       # all event dataclasses + EventType enum
 │   ├── backtester.py                   # event loop (backtest)
-│   └── live_runner.py                  # asyncio event loop (live/paper trading)
+│   ├── live_runner.py                  # asyncio event loop (live/paper trading)
+│   ├── market_hours.py                 # ET timezone + market close/daily-bar-fetch time constants
+│   └── logging_config.py              # central logging setup (rotating file + console)
 ├── strategy_params/
 │   ├── params.json                     # registry: strategy name → Strategy class path
 │   ├── sma_10_30.json                  # params for the sma_10_30 strategy instance
