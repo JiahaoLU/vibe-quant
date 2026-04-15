@@ -23,6 +23,7 @@ from trading.impl import (
     LiveRunner,
     RiskGuard,
     SimplePortfolio,
+    SqliteTradeLogger,
     StrategyContainer,
 )
 
@@ -69,6 +70,8 @@ risk_guard = RiskGuard(
     initial_capital    = INITIAL_CAPITAL,
 )
 
+trade_logger = SqliteTradeLogger(db_path="logs/trades.db")
+
 reconciler = AlpacaReconciler(api_key=API_KEY, secret=SECRET, paper=(MODE == "paper"))
 
 portfolio = SimplePortfolio(
@@ -81,7 +84,11 @@ portfolio = SimplePortfolio(
     risk_guard       = risk_guard,
 )
 
-runner = LiveRunner(events, data, strategy, portfolio, execution, reconciler, risk_guard)
+runner = LiveRunner(
+    events, data, strategy, portfolio, execution, reconciler, risk_guard,
+    trade_logger=trade_logger,
+    mode=MODE,
+)
 
 if __name__ == "__main__":
     asyncio.run(runner.run())
