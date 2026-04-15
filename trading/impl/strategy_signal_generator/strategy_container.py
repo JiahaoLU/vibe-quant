@@ -208,10 +208,12 @@ class StrategyContainer(StrategySignalGenerator):
             steps = self._steps[i] if self._steps else 1
             eod_gated = self._is_eod_gated[i] if self._is_eod_gated else False
             # EOD-gated strategies (daily in an intraday container) only fire when
-            # the data handler sets is_end_of_day=True on the event.  If a handler
-            # never sets that flag the strategy silently never fires — no error is
-            # raised.  All three concrete handlers (AlpacaDataHandler,
-            # YahooDataHandler, MultiCSVDataHandler) set it correctly.
+            # the data handler sets is_end_of_day=True on the event.
+            # WARNING: BarBundleEvent.is_end_of_day defaults to True, so a handler
+            # that forgets to set is_end_of_day=False on non-EOD intraday bars will
+            # cause daily strategies to fire on every bar, not just at EOD.
+            # All three concrete handlers (AlpacaDataHandler, YahooDataHandler,
+            # MultiCSVDataHandler) set it correctly.
             if eod_gated:
                 if not event.is_end_of_day:
                     continue   # daily strategy in intraday container — skip until EOD
