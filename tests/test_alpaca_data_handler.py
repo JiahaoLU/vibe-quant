@@ -327,7 +327,6 @@ def test_update_bars_async_sets_is_end_of_day_true_for_daily_bar():
     """Daily bars explicitly pass is_end_of_day=True to BarBundleEvent constructor."""
     from trading.impl.data_handler.alpaca_data_handler import AlpacaDataHandler
     from trading.events import BarBundleEvent
-    from datetime import timezone
 
     handler = AlpacaDataHandler(
         emit=MagicMock(), symbols=["AAPL"], bar_freq="1d",
@@ -343,7 +342,7 @@ def test_update_bars_async_sets_is_end_of_day_true_for_daily_bar():
     real_BarBundleEvent = BarBundleEvent
 
     def spy_bundle(*args, **kwargs):
-        construct_calls.append(kwargs)
+        construct_calls.append((args, kwargs))
         return real_BarBundleEvent(*args, **kwargs)
 
     with (
@@ -354,7 +353,9 @@ def test_update_bars_async_sets_is_end_of_day_true_for_daily_bar():
         asyncio.run(handler.update_bars_async())
 
     assert len(construct_calls) == 1
-    assert construct_calls[0].get("is_end_of_day") is True
+    args, kwargs = construct_calls[0]
+    # is_end_of_day may be passed as kwarg or (if dataclass field order: timestamp, bars, is_end_of_day) as args[2]
+    assert kwargs.get("is_end_of_day") is True or (len(args) > 2 and args[2] is True)
 
 
 def test_update_bars_async_sets_is_end_of_day_true_for_last_intraday_bar():
