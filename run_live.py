@@ -14,6 +14,7 @@ import asyncio
 import os
 import queue
 
+from trading.logging_config import configure_logging
 from trading.impl import (
     AlpacaDataHandler,
     AlpacaExecutionHandler,
@@ -35,7 +36,11 @@ MAX_LEVERAGE       = 1.0
 FILL_COST_BUFFER   = 0.002
 MAX_DAILY_LOSS_PCT = 0.05               # halt if equity drops 5% from day open
 MAX_POSITION_PCT   = 0.20              # cap any single position at 20% of equity
+TRADE_LOG_PATH = 'logs/trades.db'
+LOG_DIR        = "logs"
 # -----------------------------------------------------------------------------
+
+configure_logging(log_dir=LOG_DIR)
 
 API_KEY = os.environ["ALPACA_API_KEY"]
 SECRET  = os.environ["ALPACA_SECRET_KEY"]
@@ -70,7 +75,7 @@ risk_guard = RiskGuard(
     initial_capital    = INITIAL_CAPITAL,
 )
 
-trade_logger = SqliteTradeLogger(db_path="logs/trades.db")
+trade_logger = SqliteTradeLogger(db_path=TRADE_LOG_PATH)
 
 reconciler = AlpacaReconciler(api_key=API_KEY, secret=SECRET, paper=(MODE == "paper"))
 

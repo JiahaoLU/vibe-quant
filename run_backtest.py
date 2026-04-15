@@ -7,6 +7,7 @@ strategy_params/params.json.
 """
 import queue
 
+from trading.logging_config import configure_logging
 from analysis.result_writer import DefaultResultWriter
 from external.index_constituents import load_or_fetch_universe_manifest
 from external.yahoo import fetch_bars
@@ -35,7 +36,10 @@ RESULTS_FORMAT      = "parquet"  # "parquet" or "csv"
 USE_UNIVERSE_GATING = True
 INDEX_CODE          = "sp500"
 RELOAD_UNIVERSE     = False
+LOG_DIR             = "logs"
 # -----------------------------------------------------------------------------
+
+configure_logging(log_dir=LOG_DIR)
 
 events   = queue.Queue()
 data     = None  # resolved after strategy symbols are known

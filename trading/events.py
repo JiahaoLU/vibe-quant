@@ -71,7 +71,7 @@ class OrderEvent(Event):
     bar_low:         float = 0.0   # bar low; used for spread floor
     bar_close:       float = 0.0   # bar close; used for Parkinson vol normalisation
     bar_is_synthetic: bool = False  # True when the bar is carry-forwarded; skip volume impact
-    order_id:        str = ""      # broker order ID; empty string if not yet assigned
+    order_id:        str = ""      # client-assigned order ID sent to broker as client_order_id; empty if unset
     type: EventType = field(default=EventType.ORDER, init=False)
 
 
@@ -83,5 +83,5 @@ class FillEvent(Event):
     quantity:   int
     fill_price: float
     commission: float
-    order_id:   str = ""      # broker order ID; empty string if not yet assigned
+    order_id:   str = ""      # client-assigned order ID echoed from broker's client_order_id; empty if unset
     type: EventType = field(default=EventType.FILL, init=False)

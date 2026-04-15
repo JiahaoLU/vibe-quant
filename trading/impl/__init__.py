@@ -4,6 +4,7 @@ from .live_execution_handler.alpaca_paper_execution_handler     import AlpacaPap
 from .position_reconciler.alpaca_reconciler                     import AlpacaReconciler
 from .universe_builder.index_constituents_universe_builder      import IndexConstituentsUniverseBuilder
 from .strategy_params_loader.json_strategy_params_loader        import JsonStrategyParamsLoader
+from .trade_logger.sqlite_trade_logger                          import SqliteTradeLogger
 from ..live_runner                                               import LiveRunner
 from .data_handler.multi_csv_data_handler                       import MultiCSVDataHandler
 from .risk_guard.risk_guard                                     import RiskGuard
@@ -25,5 +26,6 @@ __all__ = [
     "SimulatedExecutionHandler",
     "SimplePortfolio",
     "StrategyContainer",
+    "SqliteTradeLogger",
     "YahooDataHandler",
 ]

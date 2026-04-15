@@ -13,6 +13,9 @@
 data/
 results/
 
+# Logs
+logs/
+
 # Python
 __pycache__/
 *.pyc
