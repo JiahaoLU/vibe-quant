@@ -123,3 +123,37 @@ def test_tick_event_is_delisted_can_be_set_true():
         is_delisted=True,
     )
     assert bar.is_delisted is True
+
+
+def test_order_event_order_id_defaults_to_empty_string():
+    order = OrderEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        order_type="MARKET", direction="BUY", quantity=10,
+    )
+    assert order.order_id == ""
+
+
+def test_order_event_order_id_can_be_set():
+    order = OrderEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        order_type="MARKET", direction="BUY", quantity=10,
+        order_id="abc-123",
+    )
+    assert order.order_id == "abc-123"
+
+
+def test_fill_event_order_id_defaults_to_empty_string():
+    fill = FillEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        direction="BUY", quantity=10, fill_price=100.0, commission=0.0,
+    )
+    assert fill.order_id == ""
+
+
+def test_fill_event_order_id_can_be_set():
+    fill = FillEvent(
+        symbol="AAPL", timestamp=datetime(2020, 1, 2),
+        direction="BUY", quantity=10, fill_price=100.0, commission=0.0,
+        order_id="abc-123",
+    )
+    assert fill.order_id == "abc-123"
