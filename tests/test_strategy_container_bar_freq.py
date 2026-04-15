@@ -48,12 +48,21 @@ def test_required_freq_returns_finest_intraday_freq():
     assert container.required_freq == "1m"
 
 
-def test_required_freq_raises_when_mixing_daily_and_intraday():
+def test_required_freq_returns_intraday_freq_when_mixing_daily_and_intraday():
+    """Mixed daily+intraday container returns the finest intraday freq — no error."""
     container = _make_container()
     container.add(_Stub, StrategyParams(symbols=["AAPL"], name="a", bar_freq="1d"))
     container.add(_Stub, StrategyParams(symbols=["MSFT"], name="b", bar_freq="5m"))
-    with pytest.raises(ValueError, match="Cannot mix"):
-        _ = container.required_freq
+    assert container.required_freq == "5m"
+
+
+def test_required_freq_returns_finest_intraday_when_mixed_with_multiple_intraday():
+    """With both daily and multiple intraday strategies, returns the finest intraday."""
+    container = _make_container()
+    container.add(_Stub, StrategyParams(symbols=["AAPL"], name="a", bar_freq="1d"))
+    container.add(_Stub, StrategyParams(symbols=["MSFT"], name="b", bar_freq="5m"))
+    container.add(_Stub, StrategyParams(symbols=["GOOG"], name="c", bar_freq="1m"))
+    assert container.required_freq == "1m"
 
 
 def _bundle(symbols: list[str]) -> BarBundleEvent:
@@ -65,6 +74,19 @@ def _bundle(symbols: list[str]) -> BarBundleEvent:
                          open=100.0, high=101.0, low=99.0, close=100.5, volume=1000.0)
             for s in symbols
         },
+    )
+
+
+def _bundle_eod(symbols: list[str], eod: bool) -> BarBundleEvent:
+    ts = datetime(2024, 1, 2, 9, 30)
+    return BarBundleEvent(
+        timestamp=ts,
+        bars={
+            s: TickEvent(symbol=s, timestamp=ts,
+                         open=100.0, high=101.0, low=99.0, close=100.5, volume=1000.0)
+            for s in symbols
+        },
+        is_end_of_day=eod,
     )
 
 
@@ -167,6 +189,90 @@ def test_daily_strategies_fire_on_every_bar():
     container.add(_Counter, StrategyParams(symbols=["AAPL"], name="d", bar_freq="1d"))
     for _ in range(3):
         container.get_signals(_bundle(["AAPL"]))
+    assert len(calls) == 3
+
+
+def test_daily_strategy_in_mixed_container_fires_only_on_eod_bars():
+    """A '1d' strategy in a mixed container fires when is_end_of_day=True, skips otherwise."""
+    calls = []
+
+    class _Counter(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event):
+            calls.append(1)
+            return None
+
+    container = _make_container()
+    container.add(_Stub,    StrategyParams(symbols=["AAPL"], name="intra", bar_freq="5m"))
+    container.add(_Counter, StrategyParams(symbols=["AAPL"], name="daily", bar_freq="1d"))
+
+    # 4 non-EOD bars, then 1 EOD bar
+    for _ in range(4):
+        container.get_signals(_bundle_eod(["AAPL"], eod=False))
+    assert calls == []
+
+    container.get_signals(_bundle_eod(["AAPL"], eod=True))
+    assert len(calls) == 1
+
+
+def test_intraday_strategy_in_mixed_container_fires_on_every_bar():
+    """The intraday strategy in a mixed container fires on every bar regardless of is_end_of_day."""
+    calls = []
+
+    class _Counter(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event):
+            calls.append(1)
+            return None
+
+    container = _make_container()
+    container.add(_Counter, StrategyParams(symbols=["AAPL"], name="intra", bar_freq="5m"))
+    container.add(_Stub,    StrategyParams(symbols=["AAPL"], name="daily", bar_freq="1d"))
+
+    for eod in [False, False, False, False, True]:
+        container.get_signals(_bundle_eod(["AAPL"], eod=eod))
+
+    assert len(calls) == 5
+
+
+def test_daily_strategy_on_get_signal_not_called_on_non_eod_bars():
+    """on_get_signal must not fire for a daily strategy on non-EOD bars."""
+    hook_calls = []
+
+    class _Tracking(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event): return None
+        def on_get_signal(self, result):
+            hook_calls.append(result)
+
+    container = _make_container()
+    container.add(_Stub,     StrategyParams(symbols=["AAPL"], name="intra", bar_freq="5m"))
+    container.add(_Tracking, StrategyParams(symbols=["AAPL"], name="daily", bar_freq="1d"))
+
+    for _ in range(4):
+        container.get_signals(_bundle_eod(["AAPL"], eod=False))
+    assert hook_calls == []
+
+    container.get_signals(_bundle_eod(["AAPL"], eod=True))
+    assert len(hook_calls) == 1
+
+
+def test_all_daily_container_unaffected_by_eod_flag():
+    """An all-daily container fires every bar regardless of is_end_of_day (uses step count, not EOD gate)."""
+    calls = []
+
+    class _Counter(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event):
+            calls.append(1)
+            return None
+
+    container = _make_container()
+    container.add(_Counter, StrategyParams(symbols=["AAPL"], name="d", bar_freq="1d"))
+
+    # Even with is_end_of_day=False (unusual for daily data, but the gate must NOT apply)
+    for _ in range(3):
+        container.get_signals(_bundle_eod(["AAPL"], eod=False))
     assert len(calls) == 3
 
 

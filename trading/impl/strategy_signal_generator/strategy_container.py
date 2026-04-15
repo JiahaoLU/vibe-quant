@@ -75,8 +75,9 @@ class StrategyContainer(StrategySignalGenerator):
         self._strategies: list[tuple[Strategy, float]] = []   # (strategy, nominal)
         self._carried:    list[dict[str, float]]        = []   # parallel; symbol → last signal
         self._ids:        list[str]                     = []   # parallel; strategy id
-        self._bar_count: int       = 0
-        self._steps:     list[int] = []
+        self._bar_count: int        = 0
+        self._steps:     list[int]  = []
+        self._is_eod_gated: list[bool] = []
 
     @property
     def symbols(self) -> list[str]:
@@ -94,41 +95,46 @@ class StrategyContainer(StrategySignalGenerator):
     def required_freq(self) -> str:
         """The finest bar_freq declared across all registered strategies.
 
-        Raises ValueError if daily ("1d") and intraday ("Xm") strategies are mixed,
-        since the demux step count (390 / X) is ambiguous for arbitrary minute freqs.
+        Mixed daily+intraday containers return the finest intraday freq; daily
+        strategies in such containers are dispatched via the EOD gate instead.
         Returns "1d" when no strategies are registered.
         """
         if not self._strategies:
             return "1d"
         freqs = [s.strategy_params.bar_freq for s, _ in self._strategies]
-        kinds = {"daily" if f == "1d" else "intraday" for f in freqs}
-        if len(kinds) > 1:
-            raise ValueError(
-                "Cannot mix daily ('1d') and intraday ('Xm') strategies in the same "
-                "StrategyContainer. Use separate containers or a single frequency."
-            )
-        if "daily" in kinds:
+        intraday = [f for f in freqs if f != "1d"]
+        if not intraday:
             return "1d"
-        minutes = [_bar_freq_to_minutes(f) for f in freqs]
+        minutes = [_bar_freq_to_minutes(f) for f in intraday]
         return f"{min(minutes)}m"
 
     def _recompute_steps(self) -> None:
-        """Recompute the per-strategy bar step counts based on required_freq.
+        """Recompute the per-strategy bar step counts and EOD-gate flags based on required_freq.
 
-        If the strategy mix is invalid (e.g. daily + intraday), steps are left
-        empty so that add() does not raise — the error surfaces later when
-        required_freq is accessed explicitly.
+        For mixed daily+intraday containers:
+        - _steps[i] for a daily strategy is computed as 390 // req_minutes (used by
+          _make_freq_adapter for get_bars aggregation — do NOT zero it out).
+        - _is_eod_gated[i] = True for daily strategies; dispatch is controlled by the
+          is_end_of_day flag on BarBundleEvent rather than the step count.
+        For all-daily or all-intraday containers, _is_eod_gated is all-False and the
+        step count alone controls dispatch.
         """
         if not self._strategies:
             self._steps = []
+            self._is_eod_gated = []
             return
-        try:
-            req_minutes = _bar_freq_to_minutes(self.required_freq)
-        except ValueError:
-            self._steps = []
+        req_freq = self.required_freq
+        if req_freq == "1d":
+            self._steps = [1] * len(self._strategies)
+            self._is_eod_gated = [False] * len(self._strategies)
             return
+        req_minutes = _bar_freq_to_minutes(req_freq)
         self._steps = [
             _bar_freq_to_minutes(s.strategy_params.bar_freq) // req_minutes
+            for s, _ in self._strategies
+        ]
+        self._is_eod_gated = [
+            s.strategy_params.bar_freq == "1d"
             for s, _ in self._strategies
         ]
 
@@ -199,8 +205,12 @@ class StrategyContainer(StrategySignalGenerator):
         self._bar_count += 1
         any_new = False
         for i, (strategy, _) in enumerate(self._strategies):
-            steps = self._steps[i] if self._steps else 1  # fallback: mixed-freq container fires all strategies
-            if self._bar_count % steps != 0:
+            steps = self._steps[i] if self._steps else 1
+            eod_gated = self._is_eod_gated[i] if self._is_eod_gated else False
+            if eod_gated:
+                if not event.is_end_of_day:
+                    continue   # daily strategy in intraday container — skip until EOD
+            elif self._bar_count % steps != 0:
                 continue   # carry-forward unchanged; strategy not called this bar
             result = strategy.calculate_signals(event)
             strategy.on_get_signal(result)
