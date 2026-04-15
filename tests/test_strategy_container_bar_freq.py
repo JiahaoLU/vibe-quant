@@ -276,6 +276,33 @@ def test_all_daily_container_unaffected_by_eod_flag():
     assert len(calls) == 3
 
 
+def test_add_strategy_daily_in_mixed_container_fires_on_eod_only():
+    """Pre-built daily strategy registered via add_strategy() fires only on EOD bars in a mixed container."""
+    calls = []
+
+    class _Counter(Strategy):
+        def _init(self, p): pass
+        def calculate_signals(self, event):
+            calls.append(1)
+            return None
+
+    daily_strategy = _Counter(
+        get_bars=lambda s, n: [],
+        strategy_params=StrategyParams(symbols=["AAPL"], name="daily", bar_freq="1d"),
+    )
+
+    container = StrategyContainer(emit=lambda e: None, get_bars=lambda s, n: [])
+    container.add(_Stub, StrategyParams(symbols=["AAPL"], name="intra", bar_freq="5m"))
+    container.add_strategy(daily_strategy)
+
+    for _ in range(3):
+        container.get_signals(_bundle_eod(["AAPL"], eod=False))
+    assert calls == []
+
+    container.get_signals(_bundle_eod(["AAPL"], eod=True))
+    assert len(calls) == 1
+
+
 # ---------------------------------------------------------------------------
 # Helpers for adapter / aggregation tests
 # ---------------------------------------------------------------------------
