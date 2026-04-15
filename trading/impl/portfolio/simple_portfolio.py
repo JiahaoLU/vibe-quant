@@ -86,19 +86,20 @@ class SimplePortfolio(Portfolio):
             if price <= 0:
                 continue
 
-            target_qty = int(weight * self._initial_capital / price)
+            target_qty = round(weight * self._initial_capital / price)
             delta      = target_qty - self._holdings.get(symbol, 0)
 
             if delta > 0:
                 # Constraint 1: cash must cover order value + cost buffer (slippage + commission)
-                max_qty_by_cash = int(available_cash / (price * (1.0 + self._fill_cost_buffer)))
+                max_qty_by_cash = round(available_cash / (price * (1.0 + self._fill_cost_buffer)))
                 # Constraint 2: total gross exposure must not exceed equity × max_leverage
                 # current_exposure includes existing holdings + orders already placed this bar
                 current_exposure = holdings_value + (self._cash - available_cash)
-                max_qty_by_leverage = max(0, int((max_gross_exposure - current_exposure) / price))
+                headroom = max(0.0, max_gross_exposure - current_exposure)
+                max_qty_by_leverage = round(headroom / price)
                 affordable_qty = min(delta, max_qty_by_cash, max_qty_by_leverage)
                 if affordable_qty > 0:
-                    available_cash -= affordable_qty * price * (1.0 + self._fill_cost_buffer)
+                    available_cash = round(available_cash - affordable_qty * price * (1.0 + self._fill_cost_buffer), 10)
                     self._emit_order(symbol, bar_bundle.timestamp, "BUY", affordable_qty, bar)
                     emitted_any = True
             elif delta < 0:
@@ -151,7 +152,7 @@ class SimplePortfolio(Portfolio):
             multiplier = 1 if event.direction == "BUY" else -1
             fill_cash_impact = multiplier * event.fill_price * event.quantity + event.commission
             self._holdings[event.symbol] = self._holdings.get(event.symbol, 0) + multiplier * event.quantity
-            self._cash -= fill_cash_impact
+            self._cash = round(self._cash - fill_cash_impact, 10)
 
             # Apportion fill's cash impact and share count across strategies
             # commission is always a cost (positive); add it regardless of direction
@@ -168,7 +169,7 @@ class SimplePortfolio(Portfolio):
                     self._strategy_traded_value.get(strategy_id, 0.0) + share * trade_value
                 )
                 sym_qty = self._strategy_qty.setdefault(strategy_id, {})
-                sym_qty[event.symbol] = sym_qty.get(event.symbol, 0.0) + multiplier * share * event.quantity
+                sym_qty[event.symbol] = round(sym_qty.get(event.symbol, 0.0) + multiplier * share * event.quantity, 10)
 
         market_value = 0.0
         strategy_market_value: dict[str, float] = {}

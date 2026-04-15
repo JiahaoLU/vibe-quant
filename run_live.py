@@ -35,7 +35,7 @@ INITIAL_CAPITAL    = 10_000.0
 MAX_LEVERAGE       = 1.0
 FILL_COST_BUFFER   = 0.002
 MAX_DAILY_LOSS_PCT = 0.05               # halt if equity drops 5% from day open
-MAX_POSITION_PCT   = 0.20              # cap any single position at 20% of equity
+MAX_POSITION_PCT   = 0.15              # cap any single position at 15% of equity
 TRADE_LOG_PATH = 'logs/trades.db'
 LOG_DIR        = "logs"
 # -----------------------------------------------------------------------------
