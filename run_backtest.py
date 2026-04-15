@@ -21,8 +21,8 @@ from trading.impl import (
 )
 
 # --- Configuration -----------------------------------------------------------
-START               = "2020-01-01"
-END                 = "2022-01-01"
+START               = "2025-01-01"
+END                 = "2026-01-01"
 STRATEGY_PARAMS_DIR = "strategy_params"
 INITIAL_CAPITAL     = 10_000.0
 COMMISSION_PCT      = 0.001  # 0.1% of trade value per fill

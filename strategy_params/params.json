@@ -1,4 +1,5 @@
 {
   "sma_10_30": "strategies.sma_crossover_strategy.SMACrossoverStrategy",
-  "sma_20_50": "strategies.sma_crossover_strategy.SMACrossoverStrategy"
+  "sma_20_50": "strategies.sma_crossover_strategy.SMACrossoverStrategy",
+  "sma_5_20_2h": "strategies.sma_crossover_strategy.SMACrossoverStrategy"
 }

@@ -33,7 +33,7 @@ class TickEvent:                 # value type — not an Event subclass, not que
 class BarBundleEvent(Event):
     timestamp:     datetime
     bars:          dict[str, TickEvent]   # symbol → tick
-    is_end_of_day: bool = True
+    is_end_of_day: bool = False
     type: EventType = field(default=EventType.BAR_BUNDLE, init=False)
 
 

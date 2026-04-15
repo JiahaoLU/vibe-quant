@@ -10,11 +10,28 @@ def _bar_freq_to_minutes(bar_freq: str) -> int:
     """Convert a bar_freq string to its minute equivalent.
 
     "1d" → 390  (6.5-hour trading day)
+    "Xh" → X*60 (e.g. "2h" → 120)
     "Xm" → X    (e.g. "5m" → 5)
     """
     if bar_freq == "1d":
         return 390
+    if bar_freq.endswith("h"):
+        return int(bar_freq[:-1]) * 60
     return int(bar_freq.rstrip("m"))
+
+
+# Standard intraday base intervals in descending order (minutes).
+# required_freq picks the coarsest interval that evenly divides all
+# intraday strategy periods — this is what gets passed to the data handler.
+_STANDARD_INTRADAY_MINUTES = [90, 60, 30, 15, 5, 2, 1]
+
+
+def _base_fetch_minutes(strategy_minutes: list[int]) -> int:
+    """Return the coarsest standard interval (minutes) that divides every value in strategy_minutes."""
+    for m in _STANDARD_INTRADAY_MINUTES:
+        if all(sm % m == 0 for sm in strategy_minutes):
+            return m
+    return 1
 
 
 def _aggregate_bars(bars: list[TickEvent], steps: int) -> list[TickEvent]:
@@ -106,7 +123,7 @@ class StrategyContainer(StrategySignalGenerator):
         if not intraday:
             return "1d"
         minutes = [_bar_freq_to_minutes(f) for f in intraday]
-        return f"{min(minutes)}m"
+        return f"{_base_fetch_minutes(minutes)}m"
 
     def _recompute_steps(self) -> None:
         """Recompute the per-strategy bar step counts and EOD-gate flags based on required_freq.
@@ -209,11 +226,9 @@ class StrategyContainer(StrategySignalGenerator):
             eod_gated = self._is_eod_gated[i] if self._is_eod_gated else False
             # EOD-gated strategies (daily in an intraday container) only fire when
             # the data handler sets is_end_of_day=True on the event.
-            # WARNING: BarBundleEvent.is_end_of_day defaults to True, so a handler
-            # that forgets to set is_end_of_day=False on non-EOD intraday bars will
-            # cause daily strategies to fire on every bar, not just at EOD.
-            # All three concrete handlers (AlpacaDataHandler, YahooDataHandler,
-            # MultiCSVDataHandler) set it correctly.
+            # BarBundleEvent.is_end_of_day defaults to False, so a handler that
+            # forgets to set is_end_of_day=True on EOD bars will cause daily
+            # strategies to silently never fire.
             if eod_gated:
                 if not event.is_end_of_day:
                     continue   # daily strategy in intraday container — skip until EOD

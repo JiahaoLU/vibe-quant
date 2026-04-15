@@ -18,6 +18,13 @@ from external.alpaca import fetch_bars, fetch_bars_history
 logger = logging.getLogger(__name__)
 
 
+def _bar_freq_to_minutes(bar_freq: str) -> int:
+    """Convert bar_freq string to minutes. "Xh" → X*60, "Xm" → X."""
+    if bar_freq.endswith("h"):
+        return int(bar_freq[:-1]) * 60
+    return int(bar_freq.rstrip("m"))
+
+
 class AlpacaDataHandler(DataHandler):
     """
     Live DataHandler backed by Alpaca's market data API.
@@ -65,7 +72,7 @@ class AlpacaDataHandler(DataHandler):
         if self._bar_freq == "1d":
             start = now - timedelta(days=self._max_history * 2)
         else:
-            bar_minutes = int(self._bar_freq.rstrip("m"))
+            bar_minutes = _bar_freq_to_minutes(self._bar_freq)
             start = now - timedelta(minutes=self._max_history * bar_minutes * 3)
         history = fetch_bars_history(
             symbols=self._symbols,
@@ -156,7 +163,7 @@ class AlpacaDataHandler(DataHandler):
             if self._bar_freq == "1d":
                 is_eod = True
             else:
-                bar_minutes = int(self._bar_freq.rstrip("m"))
+                bar_minutes = _bar_freq_to_minutes(self._bar_freq)
                 ts_et = ts.astimezone(MARKET_TZ)
                 close_minutes = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE
                 is_eod = ts_et.hour * 60 + ts_et.minute + bar_minutes >= close_minutes
@@ -179,7 +186,7 @@ class AlpacaDataHandler(DataHandler):
                     target += timedelta(days=1)
             return max(0.0, (target - now).total_seconds())
         else:
-            minutes = int(self._bar_freq.rstrip("m"))
+            minutes = _bar_freq_to_minutes(self._bar_freq)
             next_min = ((now.minute // minutes) + 1) * minutes
             delta_min = next_min - now.minute
             target = now.replace(second=0, microsecond=0) + timedelta(minutes=delta_min)

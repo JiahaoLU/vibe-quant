@@ -28,13 +28,12 @@ TERMINAL_ORDER_STATUSES: frozenset[str] = frozenset({
 def _timeframe(bar_freq: str) -> TimeFrame:
     if bar_freq == "1d":
         return TimeFrame.Day
-    if bar_freq == "1h":
-        return TimeFrame.Hour
     if bar_freq == "1m":
         return TimeFrame.Minute
+    if bar_freq.endswith("h"):
+        return TimeFrame(int(bar_freq[:-1]), TimeFrameUnit.Hour)
     if bar_freq.endswith("m"):
-        minutes = int(bar_freq[:-1])
-        return TimeFrame(minutes, TimeFrameUnit.Minute)
+        return TimeFrame(int(bar_freq[:-1]), TimeFrameUnit.Minute)
     raise ValueError(f"Unsupported bar_freq: {bar_freq!r}")
 
 
