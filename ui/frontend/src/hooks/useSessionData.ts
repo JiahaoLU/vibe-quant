@@ -8,6 +8,7 @@ interface SessionData {
   orders: Order[]
   signals: Signal[]
   loading: boolean
+  error: string | null
   setSnapshots: React.Dispatch<React.SetStateAction<Snapshot[]>>
   setFills: React.Dispatch<React.SetStateAction<Fill[]>>
 }
@@ -18,10 +19,12 @@ export function useSessionData(sessionId: string | null): SessionData {
   const [orders, setOrders] = useState<Order[]>([])
   const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!sessionId) return
     setLoading(true)
+    setError(null)
     setSnapshots([])
     setFills([])
     setOrders([])
@@ -38,8 +41,11 @@ export function useSessionData(sessionId: string | null): SessionData {
       setOrders(o)
       setSignals(sigs)
       setLoading(false)
+    }).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Failed to load session data')
+      setLoading(false)
     })
   }, [sessionId])
 
-  return { snapshots, fills, orders, signals, loading, setSnapshots, setFills }
+  return { snapshots, fills, orders, signals, loading, error, setSnapshots, setFills }
 }

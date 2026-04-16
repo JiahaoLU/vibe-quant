@@ -22,7 +22,7 @@ def db_path(tmp_path):
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def test_get_sessions_returns_all(db_path):

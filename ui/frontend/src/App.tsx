@@ -32,7 +32,7 @@ export default function App() {
     })
   }, [])
 
-  const { snapshots, fills, orders, signals, loading, setSnapshots, setFills } =
+  const { snapshots, fills, orders, signals, loading, error, setSnapshots, setFills } =
     useSessionData(selectedId)
 
   const isLive = selectedId !== null && selectedId === liveSessionId
@@ -61,6 +61,12 @@ export default function App() {
         fillCount={fills.length}
         sseStatus={sseStatus}
       />
+
+      {error && (
+        <div style={{ background: '#7f1d1d', color: '#fca5a5', padding: '8px 16px', fontSize: 13 }}>
+          Error: {error}
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
