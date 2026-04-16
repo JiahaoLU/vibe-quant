@@ -54,7 +54,7 @@ python -m ipykernel install --user --name=vibe-quant
 python run_backtest.py
 
 # 5. Visualize results (select the "vibe-quant" kernel in the notebook)
-jupyter notebook plot_results.ipynb
+jupyter notebook analysis/plot_results.ipynb
 ```
 
 Output:
@@ -110,6 +110,67 @@ Bar frequency is derived automatically from `strategy.required_freq` — set `ba
 On startup `LiveRunner` calls `AlpacaReconciler.hydrate()` which syncs broker positions into the portfolio before the first bar arrives. On SIGINT/SIGTERM it drains any in-flight fills and shuts down cleanly.
 
 Strategy-specific parameters (symbols, windows, etc.) live in `strategy_params/<strategy_name>.json`. Strategies are registered in `strategy_params/params.json`.
+
+### Trade log (SQLite)
+
+Every live/paper session writes to `logs/trades.db` (gitignored). Five tables:
+
+| Table | Description |
+|---|---|
+| `sessions` | One row per `LiveRunner` run — tracks start/end time, mode, and strategy list |
+| `signals` | One row per strategy×symbol per bar — the raw float weight emitted |
+| `orders` | Non-HOLD `OrderEvent`s — intent before execution |
+| `fills` | Non-HOLD `FillEvent`s — confirmed executions with fill price and commission |
+| `pnl_snapshots` | Portfolio equity snapshot after each fill — total equity plus per-strategy PnL and equity (JSON) |
+
+Schema:
+
+```sql
+CREATE TABLE sessions (
+    session_id     TEXT PRIMARY KEY,
+    started_at     TEXT NOT NULL,          -- ISO-8601 UTC
+    ended_at       TEXT,                   -- NULL until session closes
+    mode           TEXT NOT NULL,          -- "paper" | "live"
+    strategy_names TEXT NOT NULL           -- JSON array of strategy class names
+);
+CREATE TABLE signals (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   TEXT    NOT NULL,
+    timestamp    TEXT    NOT NULL,         -- ISO-8601 UTC
+    strategy_id  TEXT    NOT NULL,
+    symbol       TEXT    NOT NULL,
+    weight       REAL    NOT NULL          -- float in [-1, 1]
+);
+CREATE TABLE orders (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT    NOT NULL,
+    order_id        TEXT    NOT NULL UNIQUE,  -- UUID4 client order ID
+    timestamp       TEXT    NOT NULL,
+    symbol          TEXT    NOT NULL,
+    direction       TEXT    NOT NULL,         -- "BUY" | "SELL"
+    quantity        INTEGER NOT NULL,
+    reference_price REAL    NOT NULL
+);
+CREATE TABLE fills (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   TEXT    NOT NULL,
+    order_id     TEXT    NOT NULL,         -- echoed from client_order_id
+    timestamp    TEXT    NOT NULL,
+    symbol       TEXT    NOT NULL,
+    direction    TEXT    NOT NULL,         -- "BUY" | "SELL"
+    quantity     INTEGER NOT NULL,
+    fill_price   REAL    NOT NULL,
+    commission   REAL    NOT NULL
+);
+CREATE TABLE pnl_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT    NOT NULL,
+    timestamp       TEXT    NOT NULL,
+    total_equity    REAL    NOT NULL,
+    strategy_pnl    TEXT    NOT NULL,      -- JSON object: strategy_id → realised PnL float
+    strategy_equity TEXT    NOT NULL       -- JSON object: strategy_id → equity float
+);
+```
 
 ## CSV format
 
@@ -253,7 +314,10 @@ And create `strategy_params/my_strategy.json`:
 ├── tests/
 ├── run_backtest.py                      # backtest entry point + configuration
 ├── run_live.py                          # live/paper trading entry point + configuration
-├── plot_results.ipynb                   # equity curve, drawdown, trades, per-strategy metrics & PnL
+├── analysis/
+│   ├── plot_results.ipynb               # equity curve, drawdown, trades, per-strategy metrics & PnL
+│   ├── plot_trades.ipynb                # trade log viewer — equity, fills, signals, commissions
+│   └── result_writer.py
 └── requirements.txt
 ```
 
@@ -264,10 +328,10 @@ Python 3.10+ (uses `match` statement).
 | Package | Purpose |
 |---|---|
 | `yfinance` | `YahooDataHandler` — fetches OHLCV data from Yahoo Finance |
-| `matplotlib>=3.7` | `plot_results.ipynb` — equity curve, drawdown, trade markers |
+| `matplotlib>=3.7` | `analysis/plot_results.ipynb` — equity curve, drawdown, trade markers |
 | `ipykernel` | Registers the venv as a Jupyter kernel (`vibe-quant`) |
 | `pytest>=7.0` | Test suite (`tests/`) |
-| `pandas>=2.0` | `plot_results.ipynb` — loads result files for display |
+| `pandas>=2.0` | `analysis/plot_results.ipynb`, `analysis/plot_trades.ipynb` — loads result files for display |
 | `pyarrow>=14.0` | Parquet result writing (`DefaultResultWriter`) |
 | `alpaca-py>=0.13` | `AlpacaDataHandler`, `AlpacaExecutionHandler`, `AlpacaReconciler` — live/paper trading |
 | `pytest-asyncio>=0.23` | Async test support for live trading components |

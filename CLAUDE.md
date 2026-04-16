@@ -12,7 +12,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python -m ipykernel install --user --name=claude-learn
 python run_backtest.py            # run backtest, write results/ (equity_curve, summary_metrics, strategy_pnl, strategy_metrics)
-jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
+jupyter notebook analysis/plot_results.ipynb  # select "claude-learn" kernel
 ```
 
 ## Architecture rules
@@ -31,7 +31,7 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 
 **The sum of positive signals across a `SignalBundleEvent` should be ≤ 1** so the strategy never over-allocates its nominal. When multiple symbols are active, divide equally (or by your own weights).
 
-`StrategyContainer` aggregates one bundle per bar by combining all strategies' carry-forward signals weighted by `StrategyParams.nominal`.  `SimplePortfolio` then rebalances to `target_qty = int(signal × initial_capital / price)`.
+`StrategyContainer` aggregates one bundle per bar by combining all strategies' carry-forward signals weighted by `StrategyParams.nominal`.  `SimplePortfolio` then rebalances to `target_qty = round(signal × initial_capital / price)`.
 
 ## Adding a new strategy
 
@@ -72,9 +72,11 @@ jupyter notebook plot_results.ipynb  # select "claude-learn" kernel
 | `trading/impl/risk_guard/risk_guard.py` | Injected into `SimplePortfolio`; enforces daily loss limit and per-symbol position cap before each rebalance. |
 | `external/alpaca.py` | Thin wrappers around the `alpaca-py` SDK used by all Alpaca implementations. |
 | `trading/logging_config.py` | Call `configure_logging()` once at startup; configures rotating file handler under `logs/` and console handler for all modules. |
+| `trading/impl/trade_logger/sqlite_trade_logger.py` | `SqliteTradeLogger` — creates `logs/trades.db` on first run; five tables: `sessions`, `signals`, `orders`, `fills`, `pnl_snapshots`. See README "Trade log (SQLite)" for full schema. |
 | `run_backtest.py` | Backtest wiring point. All backtest configuration constants live here. |
 | `run_live.py` | Live/paper trading wiring point. Set `MODE`, risk limits, and credentials here. Bar frequency is derived from `strategy.required_freq`. |
-| `plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |
+| `analysis/plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |
+| `analysis/plot_trades.ipynb` | Trade log viewer — reads `logs/trades.db`; equity curve, fills, signals, commissions/slippage. |
 
 ## CSV data format
 

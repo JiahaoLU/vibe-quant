@@ -4,16 +4,17 @@
 - `trading/` contains abstract bases (`base/`), concrete implementations (`impl/`), event dataclasses, and `backtester.py`; `run_backtest.py` wires them into the event loop.
 - `strategies/` is the extension point for signal generators and their `StrategyParams`.
 - `external/` holds helpers such as the `yfinance` wrapper, while `data/` stores CSV samples used by `MultiCSVDataHandler`.
-- `results/` gathers the equity curves, metrics, and charts that `plot_results.ipynb` visualizes; notebooks, reports, and drafting notes can live under `analysis/` or `docs/`.
+- `results/` gathers the equity curves, metrics, and charts that `analysis/plot_results.ipynb` visualizes; `logs/trades.db` is the live-session trade log visualised by `analysis/plot_trades.ipynb`; other notebooks, reports, and drafting notes live under `analysis/` or `docs/`.
 - `tests/` mirrors the trading modules with `test_*.py` files and covers the backtester, portfolio, execution handler, data handlers, and container logic.
 
 ## Build, Test, and Development Commands
 - `python3 -m venv .venv` + `source .venv/bin/activate` → create and enter the isolated environment.
 - `pip install -r requirements.txt` → install pinned dependencies (`yfinance`, `pandas`, `pytest`, `matplotlib`, etc.).
-- `python -m ipykernel install --user --name=vibe-quant` → register the kernel that `plot_results.ipynb` references.
+- `python -m ipykernel install --user --name=vibe-quant` → register the kernel that the analysis notebooks reference.
 - `python run_backtest.py` → execute the event-driven engine with the tunables defined at the top of that file.
 - `python -m pytest` → run the unit suite; `pytest.ini` already adds `-m "not integration"` to keep integration work opt-in.
-- `jupyter notebook plot_results.ipynb` → visualize the CSV/jpg files in `results/`.
+- `jupyter notebook analysis/plot_results.ipynb` → visualize the CSV/jpg files in `results/`.
+- `jupyter notebook analysis/plot_trades.ipynb` → visualize the SQLite trade log in `logs/trades.db`.
 
 ## Architecture rules
 

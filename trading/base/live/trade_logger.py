@@ -27,6 +27,11 @@ class TradeLogger(ABC):
         ...
 
     @abstractmethod
+    def log_snapshot(self, session_id: str, snapshot: dict) -> None:
+        """Log a PnL snapshot after each fill (latest equity_curve row from Portfolio)."""
+        ...
+
+    @abstractmethod
     def close_session(self, session_id: str) -> None:
         """Record the end of a trading session."""
         ...

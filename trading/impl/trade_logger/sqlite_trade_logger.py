@@ -7,6 +7,14 @@ from ...base.live.trade_logger import TradeLogger
 from ...events import FillEvent, OrderEvent, StrategyBundleEvent
 
 _DDL = """
+CREATE TABLE IF NOT EXISTS pnl_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT    NOT NULL,
+    timestamp       TEXT    NOT NULL,
+    total_equity    REAL    NOT NULL,
+    strategy_pnl    TEXT    NOT NULL,
+    strategy_equity TEXT    NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sessions (
     session_id     TEXT PRIMARY KEY,
     started_at     TEXT NOT NULL,
@@ -93,6 +101,20 @@ class SqliteTradeLogger(TradeLogger):
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (session_id, event.order_id, event.timestamp.isoformat(),
              event.symbol, event.direction, event.quantity, event.fill_price, event.commission),
+        )
+        self._conn.commit()
+
+    def log_snapshot(self, session_id: str, snapshot: dict) -> None:
+        self._conn.execute(
+            "INSERT INTO pnl_snapshots (session_id, timestamp, total_equity, strategy_pnl, strategy_equity)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                session_id,
+                snapshot["timestamp"].isoformat(),
+                snapshot["equity"],
+                json.dumps(snapshot.get("strategy_pnl", {})),
+                json.dumps(snapshot.get("strategy_equity", {})),
+            ),
         )
         self._conn.commit()
 

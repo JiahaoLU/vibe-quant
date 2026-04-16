@@ -127,3 +127,5 @@ class LiveRunner(LiveRunnerBase):
                 if self._trade_logger is not None and event.direction != "HOLD":
                     self._trade_logger.log_fill(self._session_id, event)
                 self._portfolio.on_fill(event)
+                if self._trade_logger is not None and event.direction != "HOLD" and self._portfolio.equity_curve:
+                    self._trade_logger.log_snapshot(self._session_id, self._portfolio.equity_curve[-1])
