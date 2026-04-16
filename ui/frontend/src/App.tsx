@@ -11,12 +11,6 @@ import { useSessionData } from './hooks/useSessionData'
 import { useLiveSSE } from './hooks/useLiveSSE'
 import type { Session } from './types'
 
-const GRID2: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: 16,
-}
-
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -63,23 +57,19 @@ export default function App() {
       />
 
       {error && (
-        <div style={{ background: '#7f1d1d', color: '#fca5a5', padding: '8px 16px', fontSize: 13 }}>
-          Error: {error}
-        </div>
+        <div className="error-bar">Error: {error}</div>
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
-          Loading…
-        </div>
+        <div className="loading-state">Loading…</div>
       ) : (
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="app-content">
           <TradeSummary fills={fills} orders={orders} />
-          <div style={GRID2}>
+          <div className="app-grid-2">
             <EquityChart snapshots={snapshots} />
             <FillsChart fills={fills} />
           </div>
-          <div style={GRID2}>
+          <div className="app-grid-2">
             <SignalHeatmap signals={signals} />
             <CommissionsChart fills={fills} orders={orders} />
           </div>

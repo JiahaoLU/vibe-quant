@@ -1,5 +1,6 @@
 import Plot from 'react-plotly.js'
 import type { Signal } from '../types'
+import { DARK_LAYOUT, C } from '../theme'
 import { ChartCard, EmptyState } from './ChartCard'
 
 interface SignalHeatmapProps {
@@ -16,7 +17,6 @@ export function SignalHeatmap({ signals }: SignalHeatmapProps) {
   const symbols = [...new Set(signals.map((s) => s.symbol))].sort()
   const times = [...new Set(signals.map((s) => s.timestamp))].sort()
 
-  // Build z matrix: rows = symbols, cols = times
   const z: (number | null)[][] = symbols.map((sym) =>
     times.map((t) => {
       const sig = signals.find((s) => s.symbol === sym && s.timestamp === t)
@@ -24,28 +24,31 @@ export function SignalHeatmap({ signals }: SignalHeatmapProps) {
     }),
   )
 
-  const height = Math.max(180, symbols.length * 32 + 60)
-
   const trace: Plotly.Data = {
     type: 'heatmap',
     x: times,
     y: symbols,
     z,
-    colorscale: 'RdYlGn',
+    colorscale: [
+      [0,   C.red],
+      [0.5, '#1a1e2e'],
+      [1,   C.green],
+    ],
     zmin: -1,
     zmax: 1,
     showscale: true,
-    colorbar: { thickness: 12, len: 0.8, tickfont: { size: 9, color: '#94a3b8' } },
+    colorbar: {
+      thickness: 10,
+      len: 0.8,
+      tickfont: { size: 9, color: C.text },
+      outlinewidth: 0,
+    },
   }
 
   const layout: Partial<Plotly.Layout> = {
-    paper_bgcolor: '#1a1a2e',
-    plot_bgcolor: '#1a1a2e',
-    font: { color: '#94a3b8', size: 11 },
+    ...DARK_LAYOUT,
+    xaxis: { ...DARK_LAYOUT.xaxis, type: 'date' },
     margin: { t: 10, r: 60, b: 40, l: 65 },
-    xaxis: { type: 'date', gridcolor: '#2a2a3e', color: '#64748b' },
-    yaxis: { gridcolor: '#2a2a3e', color: '#64748b' },
-    height,
   }
 
   return (
@@ -54,7 +57,7 @@ export function SignalHeatmap({ signals }: SignalHeatmapProps) {
         data={[trace]}
         layout={layout}
         config={{ displayModeBar: false, responsive: true }}
-        style={{ width: '100%' }}
+        style={{ width: '100%', height: '100%' }}
         useResizeHandler
       />
     </ChartCard>

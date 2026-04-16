@@ -1,111 +1,270 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* ── Design tokens ─────────────────────────────────────────── */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --bg-base:          #07080f;
+  --bg-surface:       rgba(255, 255, 255, 0.042);
+  --bg-surface-hover: rgba(255, 255, 255, 0.072);
+  --bg-header:        rgba(7, 8, 15, 0.88);
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --border:    rgba(255, 255, 255, 0.085);
+  --border-hi: rgba(255, 255, 255, 0.16);
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  --text-bright: #e2e6f0;
+  --text:        #7a8199;
+  --text-dim:    #3e4560;
+
+  --green:  #00d4a0;
+  --red:    #ff3d55;
+  --blue:   #4d9fff;
+  --amber:  #f5a623;
+  --purple: #a78bfa;
+  --cyan:   #06d6d4;
+
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius:    8px;
+  --radius-sm: 5px;
+
+  font: 14px/1.5 var(--font-sans);
   color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  background: var(--bg-base);
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  text-rendering: optimizeLegibility;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+/* ── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background-color: var(--bg-base);
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  width: 100%;
+  height: 100svh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  overflow: hidden;
 }
 
-body {
-  margin: 0;
+/* ── Frosted-glass primitives ──────────────────────────────── */
+.glass {
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
+/* ── Glass button / select ─────────────────────────────────── */
+.glass-btn {
+  appearance: none;
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  outline: none;
+}
+
+.glass-btn:hover,
+.glass-btn:focus {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-hi);
+  color: var(--text-bright);
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.site-header {
+  background: var(--bg-header);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.site-header__title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.2px;
+  color: var(--text-bright);
+}
+
+.site-header__divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.site-header__badge-live {
+  background: var(--red);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.site-header__stats {
+  margin-left: auto;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.site-header__stats strong {
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 500;
-  color: var(--text-h);
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+/* ── Chart card ────────────────────────────────────────────── */
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+.chart-card__header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
+.chart-card__title {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  color: var(--text-bright);
+}
+
+.chart-card__subtitle {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.chart-card__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Empty state ───────────────────────────────────────────── */
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+
+/* ── Stat card (TradeSummary) ──────────────────────────────── */
+.stat-card {
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.stat-card__label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+
+.stat-card__value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-bright);
+  letter-spacing: -0.5px;
+}
+
+/* ── Summary table ─────────────────────────────────────────── */
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.summary-table th {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
   padding: 4px 8px;
-  background: var(--code-bg);
+}
+
+.summary-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.summary-table td:first-child {
+  font-family: var(--font-sans);
+  color: var(--text-bright);
+}
+
+/* ── Loading / error ───────────────────────────────────────── */
+.error-bar {
+  background: rgba(255, 61, 85, 0.15);
+  border-bottom: 1px solid rgba(255, 61, 85, 0.3);
+  color: #ff8fa0;
+  padding: 6px 16px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.loading-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+/* ── SSE indicator dot ─────────────────────────────────────── */
+.sse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
 }
