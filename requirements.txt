@@ -19,3 +19,7 @@ pyarrow>=14.0
 # Live trading:
 alpaca-py>=0.13
 pytest-asyncio>=0.23
+
+# Trade monitor UI:
+fastapi>=0.110
+uvicorn>=0.29
