@@ -1,121 +1,84 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
 import './App.css'
+import { fetchLiveSession, fetchSessions } from './api'
+import { CommissionsChart } from './components/CommissionsChart'
+import { EquityChart } from './components/EquityChart'
+import { FillsChart } from './components/FillsChart'
+import { Header } from './components/Header'
+import { SignalHeatmap } from './components/SignalHeatmap'
+import { TradeSummary } from './components/TradeSummary'
+import { useSessionData } from './hooks/useSessionData'
+import { useLiveSSE } from './hooks/useLiveSSE'
+import type { Session } from './types'
 
-function App() {
-  const [count, setCount] = useState(0)
+const GRID2: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: 16,
+}
+
+export default function App() {
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
+
+  // Load session list on mount
+  useEffect(() => {
+    Promise.all([fetchSessions(), fetchLiveSession()]).then(([all, live]) => {
+      setSessions(all)
+      const id = live ? live.session_id : all[0]?.session_id ?? null
+      if (live) setLiveSessionId(live.session_id)
+      setSelectedId(id)
+    })
+  }, [])
+
+  const { snapshots, fills, orders, signals, loading, setSnapshots, setFills } =
+    useSessionData(selectedId)
+
+  const isLive = selectedId !== null && selectedId === liveSessionId
+
+  const { status: sseStatus } = useLiveSSE(
+    isLive ? selectedId : null,
+    (newSnaps) => setSnapshots((prev) => [...prev, ...newSnaps]),
+    (newFills) => setFills((prev) => [...prev, ...newFills]),
+  )
+
+  const lastSnap = snapshots.at(-1) ?? null
+  const firstSnap = snapshots.at(0) ?? null
+  const equity = lastSnap?.total_equity ?? null
+  const pnl =
+    equity !== null && firstSnap !== null ? equity - firstSnap.total_equity : null
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      <Header
+        sessions={sessions}
+        selectedId={selectedId}
+        liveSessionId={liveSessionId}
+        onSelectSession={setSelectedId}
+        equity={equity}
+        pnl={pnl}
+        fillCount={fills.length}
+        sseStatus={sseStatus}
+      />
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+          Loading…
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+      ) : (
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <TradeSummary fills={fills} orders={orders} />
+          <div style={GRID2}>
+            <EquityChart snapshots={snapshots} />
+            <FillsChart fills={fills} />
+          </div>
+          <div style={GRID2}>
+            <SignalHeatmap signals={signals} />
+            <CommissionsChart fills={fills} orders={orders} />
+          </div>
         </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      )}
     </>
   )
 }
-
-export default App
