@@ -67,6 +67,38 @@ Trades (fills)  : 28
 Equity curve    : results/equity_curve.csv
 ```
 
+## Trade monitor UI
+
+A React + FastAPI dashboard that reads `logs/trades.db` and displays live or historical sessions.
+
+**Viewing historical sessions (2 terminals):**
+
+```bash
+# Terminal 1 — FastAPI backend (REST + SSE on :8000)
+python ui/run_server.py
+
+# Terminal 2 — Vite dev server (React UI on :5173)
+cd ui/frontend
+npm install        # first time only
+npm run dev
+```
+
+**Monitoring a live session (3 terminals):**
+
+```bash
+# Terminal 1 — live/paper trading engine
+python run_live.py
+
+# Terminal 2 — FastAPI backend (REST + SSE on :8000)
+python ui/run_server.py
+
+# Terminal 3 — Vite dev server (React UI on :5173)
+cd ui/frontend
+npm run dev
+```
+
+Open `http://localhost:5173`. The session selector in the header lists all recorded sessions; the live session (if `run_live.py` is active) is selected by default and updates in real time via SSE.
+
 ## Configuration
 
 Edit the constants at the top of `run_backtest.py`:
@@ -90,8 +122,6 @@ export ALPACA_API_KEY=your_key
 export ALPACA_SECRET_KEY=your_secret
 
 # Paper trading (default — safe, uses Alpaca paper endpoint)
-python run_live.py
-
 # Live trading (real capital — change MODE = "live" in run_live.py first)
 python run_live.py
 ```
@@ -318,6 +348,16 @@ And create `strategy_params/my_strategy.json`:
 │   ├── plot_results.ipynb               # equity curve, drawdown, trades, per-strategy metrics & PnL
 │   ├── plot_trades.ipynb                # trade log viewer — equity, fills, signals, commissions
 │   └── result_writer.py
+├── ui/
+│   ├── server/                          # FastAPI backend — reads logs/trades.db, serves REST + SSE
+│   │   ├── app.py                       # create_app(); run with `uvicorn ui.server.app:app --reload`
+│   │   ├── db.py                        # async SQLite helpers (sessions, fills, snapshots, signals)
+│   │   └── routes/                      # sessions.py (REST) + sse.py (live SSE stream)
+│   └── frontend/                        # React + TypeScript + Vite trade monitor
+│       └── src/
+│           ├── App.tsx                  # session selector + layout
+│           ├── components/              # Header, TradeSummary, EquityChart, FillsChart, SignalHeatmap, CommissionsChart
+│           └── hooks/                   # useSessionData (REST), useLiveSSE (SSE)
 └── requirements.txt
 ```
 
@@ -335,6 +375,8 @@ Python 3.10+ (uses `match` statement).
 | `pyarrow>=14.0` | Parquet result writing (`DefaultResultWriter`) |
 | `alpaca-py>=0.13` | `AlpacaDataHandler`, `AlpacaExecutionHandler`, `AlpacaReconciler` — live/paper trading |
 | `pytest-asyncio>=0.23` | Async test support for live trading components |
+| `fastapi>=0.110` | Trade monitor UI backend (`ui/server/`) |
+| `uvicorn>=0.29` | ASGI server for the FastAPI trade monitor backend |
 
 Install: `pip install -r requirements.txt`
 

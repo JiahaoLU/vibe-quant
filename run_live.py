@@ -95,20 +95,5 @@ runner = LiveRunner(
     mode=MODE,
 )
 
-UI_HOST = "127.0.0.1"
-UI_PORT = 8000
-
 if __name__ == "__main__":
-    import uvicorn
-    from ui.server.app import create_app
-
-    ui_app = create_app(db_path=TRADE_LOG_PATH)
-    ui_config = uvicorn.Config(
-        ui_app, host=UI_HOST, port=UI_PORT, log_level="warning"
-    )
-    ui_server = uvicorn.Server(ui_config)
-
-    async def _main() -> None:
-        await asyncio.gather(runner.run(), ui_server.serve())
-
-    asyncio.run(_main())
+    asyncio.run(runner.run())

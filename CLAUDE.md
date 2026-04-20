@@ -75,6 +75,8 @@ jupyter notebook analysis/plot_results.ipynb  # select "claude-learn" kernel
 | `trading/impl/trade_logger/sqlite_trade_logger.py` | `SqliteTradeLogger` — creates `logs/trades.db` on first run; five tables: `sessions`, `signals`, `orders`, `fills`, `pnl_snapshots`. See README "Trade log (SQLite)" for full schema. |
 | `run_backtest.py` | Backtest wiring point. All backtest configuration constants live here. |
 | `run_live.py` | Live/paper trading wiring point. Set `MODE`, risk limits, and credentials here. Bar frequency is derived from `strategy.required_freq`. |
+| `ui/run_server.py` | Standalone trade monitor backend. Run with `python ui/run_server.py`; serves REST + SSE on `:8000`. Use this to browse historical sessions without starting the live engine. |
+| `ui/server/app.py` | `create_app(db_path)` factory — used by both `ui/run_server.py` and `run_live.py`. |
 | `analysis/plot_results.ipynb` | Visualization only — reads parquet or CSV files from `results/`, never imports `trading/`. |
 | `analysis/plot_trades.ipynb` | Trade log viewer — reads `logs/trades.db`; equity curve, fills, signals, commissions/slippage. |
 
